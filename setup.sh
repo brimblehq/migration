@@ -73,11 +73,6 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-if ! command -v ufw >/dev/null 2>&1; then
-    echo "Error: UFW is not installed. Please install it first."
-    exit 1
-fi
-
 SERVERS_JSON=$(parse_params "$@")
 
 is_background() {
@@ -118,7 +113,7 @@ ENV_VAR="export INFISICAL_TOKEN=$INFISICAL_TOKEN"
 sudo apt update -y
 sudo apt upgrade -y
 
-sudo apt install curl unzip wget -y
+sudo apt install curl unzip wget ufw -y
 
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
