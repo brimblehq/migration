@@ -2,7 +2,6 @@
 
 INFISICAL_TOKEN=""
 
-
 parse_params() {
     local servers_param=""
     
@@ -36,8 +35,50 @@ parse_params() {
     echo "$servers_param"
 }
 
-SERVERS_JSON=$(parse_params "$@")
+add_servers_to_ufw() {
+    local servers_json="$1"
+    
+    # Remove the outer brackets and split by commas
+    local server_list=${servers_json#[}
+    server_list=${server_list%]}
+    
+    # Convert string to array using IFS
+    IFS=',' read -ra server_array <<< "$server_list"
+    
+    echo "Adding server IPs to UFW..."
+    
+    for server in "${server_array[@]}"; do
+        # Remove quotes from IP
+        server=$(echo "$server" | tr -d '"')
+        
+        if [[ $server =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Adding rule for IP: $server"
+            if sudo ufw allow from "$server"; then
+                echo "✓ Successfully added UFW rule for $server"
+            else
+                echo "✗ Failed to add UFW rule for $server"
+                exit 1
+            fi
+        else
+            echo "Warning: Invalid IP address format: $server"
+            exit 1
+        fi
+    done
+    
+    echo "All server IPs have been added to UFW."
+}
 
+if [ "$EUID" -ne 0 ]; then 
+    echo "Error: Please run this script as root or with sudo"
+    exit 1
+fi
+
+if ! command -v ufw >/dev/null 2>&1; then
+    echo "Error: UFW is not installed. Please install it first."
+    exit 1
+fi
+
+SERVERS_JSON=$(parse_params "$@")
 
 is_background() {
     [[ -z $(ps -o stat= -p $$) ]] || [[ ${$(ps -o stat= -p $$)%+*} =~ "s" ]]
@@ -149,15 +190,15 @@ else
     echo "INFISICAL_TOKEN is already set in .bashrc"
 fi
 
-ufw allow from 157.90.225.125
-ufw allow from 172.104.238.198
-ufw allow from 178.79.136.41
-ufw allow from 172.232.133.28
-ufw allow from 172.232.159.15
-ufw allow from 139.162.232.67
-ufw allow from 45.79.42.23
-ufw allow from 192.155.82.17
-ufw allow from 95.217.240.111
+add_servers_to_ufw "$SERVERS_JSON"
+
+echo "Reloading UFW..."
+if sudo ufw reload; then
+    echo "✓ UFW rules have been successfully updated"
+else
+    echo "✗ Failed to reload UFW"
+    exit 1
+fi
 
 ufw allow OpenSSH
 ufw allow 80/tcp
