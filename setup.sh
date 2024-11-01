@@ -223,11 +223,9 @@ fi
 add_servers_to_ufw() {
     local servers_json="$1"
     
-    # Remove the outer brackets and split by commas
     local server_list=${servers_json#[}
     server_list=${server_list%]}
     
-    # Convert string to array using IFS
     IFS=',' read -ra server_array <<< "$server_list"
     
     echo "Adding server IPs to UFW..."
@@ -391,12 +389,14 @@ sudo systemctl enable consul
 
 sudo systemctl start consul
 
+NOMAD_SERVERS=$(format_servers_for_nomad "$SERVERS_PARAM")
+
 NOMAD_CONFIG="data_dir = \"/opt/nomad\"
 bind_addr = \"0.0.0.0\"
 
 client {
   enabled = true
-  servers = $SERVERS_JSON
+  servers = $NOMAD_SERVERS
 }
 
 advertise {
