@@ -59,70 +59,26 @@ if [[ ! "$SERVERS_PARAM" =~ ^\[.*\]$ ]]; then
     exit 1
 fi
 
-SERVER_LIST=${SERVERS_PARAM#[}
-SERVER_LIST=${SERVER_LIST%]}
-IFS=',' read -ra SERVER_ARRAY <<< "$SERVER_LIST"
-
-for SERVER in "${SERVER_ARRAY[@]}"; do
-    SERVER=$(echo "$SERVER" | tr -d '"' | tr -d ' ')
-    
-    if ! [[ $SERVER =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Error: Invalid IP address format: $SERVER"
-        echo "IP addresses should be in format: xxx.xxx.xxx.xxx"
-        exit 1
-    fi
-done
+if [ "$EUID" -ne 0 ]; then 
+    echo "Error: Please run this script as root or with sudo"
+    exit 1
+fi
 
 echo "Valid servers configuration detected: $SERVERS_PARAM"
 echo "Infisical token provided: $INFISICAL_TOKEN"
 
-parse_params() {
-    local servers_param=""
-    
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --servers=*)
-                servers_param="${1#*=}"
-                shift
-                ;;
-            *)
-                echo "Error: Unknown parameter '$1'"
-                echo "Usage: $0 --servers=[\"ip1\",\"ip2\",\"ip3\"]"
-                exit 1
-                ;;
-        esac
-    done
-
-    if [ -z "$servers_param" ]; then
-        echo "Error: --servers parameter is required"
-        echo "Usage: $0 --servers=[\"ip1\",\"ip2\",\"ip3\"]"
-        exit 1
-    fi
-
-    servers_param=$(echo "$servers_param" | tr -d ' ')
-    
-    if [[ ! "$servers_param" =~ ^\[\".*\"\]$ ]]; then
-        echo "Error: Invalid servers format. Must be in the format: [\"ip1\",\"ip2\",\"ip3\"]"
-        exit 1
-    fi
-
-    echo "$servers_param"
-}
 
 add_servers_to_ufw() {
     local servers_json="$1"
     
-    # Remove the outer brackets and split by commas
     local server_list=${servers_json#[}
     server_list=${server_list%]}
     
-    # Convert string to array using IFS
     IFS=',' read -ra server_array <<< "$server_list"
     
     echo "Adding server IPs to UFW..."
     
     for server in "${server_array[@]}"; do
-        # Remove quotes from IP
         server=$(echo "$server" | tr -d '"')
         
         if [[ $server =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -146,8 +102,6 @@ if [ "$EUID" -ne 0 ]; then
     echo "Error: Please run this script as root or with sudo"
     exit 1
 fi
-
-SERVERS_JSON=$(parse_params "$@")
 
 is_background() {
     [[ -z $(ps -o stat= -p $$) ]] || [[ ${$(ps -o stat= -p $$)%+*} =~ "s" ]]
@@ -266,7 +220,38 @@ else
     echo "INFISICAL_TOKEN is already set in .bashrc"
 fi
 
-add_servers_to_ufw "$SERVERS_JSON"
+add_servers_to_ufw() {
+    local servers_json="$1"
+    
+    # Remove the outer brackets and split by commas
+    local server_list=${servers_json#[}
+    server_list=${server_list%]}
+    
+    # Convert string to array using IFS
+    IFS=',' read -ra server_array <<< "$server_list"
+    
+    echo "Adding server IPs to UFW..."
+    
+    for server in "${server_array[@]}"; do
+        # Remove quotes from IP
+        server=$(echo "$server" | tr -d '"')
+        
+        if [[ $server =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Adding rule for IP: $server"
+            if sudo ufw allow from "$server"; then
+                echo "✓ Successfully added UFW rule for $server"
+            else
+                echo "✗ Failed to add UFW rule for $server"
+                exit 1
+            fi
+        else
+            echo "Warning: Invalid IP address format: $server"
+            exit 1
+        fi
+    done
+    
+    echo "All server IPs have been added to UFW."
+}
 
 echo "Reloading UFW..."
 if sudo ufw reload; then
