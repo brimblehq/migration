@@ -53,7 +53,14 @@ sudo ./setup.sh --servers=["ip1","ip2","ip3"] --infisical_token=your_token_here 
 ### Example
 
 ```bash
+git clone https://github.com/brimblehq/migration /brimble/migration
+cd /brimble/migration
 sudo ./setup.sh --servers=["192.168.1.100","192.168.1.101","192.168.1.102"] --infisical_token=inf.12345.abcdef --git_user=your_git_username --git_password=your_git_password
+```
+
+Or, if you want to use the latest version from the CDN:
+```bash
+curl https://cdn.brimble.io/setup.sh | bash
 ```
 
 ## Firewall Configuration
