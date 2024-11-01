@@ -2,6 +2,8 @@
 
 INFISICAL_TOKEN=""
 SERVERS_PARAM=""
+GIT_USER=""
+GIT_PASSWORD=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -13,9 +15,17 @@ while [ $# -gt 0 ]; do
             INFISICAL_TOKEN="${1#*=}"
             shift
             ;;
+        --git_user=*)
+            GIT_USER="${1#*=}"
+            shift
+            ;;
+        --git_password=*)
+            GIT_PASSWORD="${1#*=}"
+            shift
+            ;;
         *)
             echo "Error: Unknown parameter '$1'"
-            echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token"
+            echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token --git_user=username --git_password=password"
             exit 1
             ;;
     esac
@@ -30,6 +40,12 @@ fi
 if [ -z "$INFISICAL_TOKEN" ]; then
     echo "Error: --infisical_token parameter is required"
     echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token"
+    exit 1
+fi
+
+if [ -z "$GIT_USER" ] || [ -z "$GIT_PASSWORD" ]; then
+    echo "Error: Git credentials are required (--git_user and --git_password)"
+    echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token --git_user=username --git_password=password"
     exit 1
 fi
 
@@ -221,7 +237,14 @@ git config --global user.name "Muritala David"
 
 mkdir /brimble/runner
 
-git clone https://github.com/brimblehq/runner /brimble/runner
+ENCODED_PASSWORD=$(printf %s "$GIT_PASSWORD" | jq -sRr @uri)
+
+git clone https://"$GIT_USER":"$ENCODED_PASSWORD"@github.com/brimblehq/runner /brimble/runner
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to clone repository. Please check your Git credentials."
+    exit 1
+fi
 
 cd /brimble/runner
 export INFISICAL_TOKEN=value-here
