@@ -34,14 +34,31 @@ if [ -z "$INFISICAL_TOKEN" ]; then
 fi
 
 SERVERS_PARAM=$(echo "$SERVERS_PARAM" | tr -d ' ')
-if [[ ! "$SERVERS_PARAM" =~ ^\[\".*\"\]$ ]]; then
-    echo "Error: Invalid servers format."
+
+if [[ ! "$SERVERS_PARAM" =~ ^\[.*\]$ ]]; then
+    echo "Error: Invalid servers format. Must be an array enclosed in square brackets."
     echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token\n"
     echo "Example:"
     echo -e "./setup.sh --servers=[\"192.168.1.100\",\"192.168.1.101\",\"192.168.1.102\"] --infisical_token=your_token"
     exit 1
 fi
 
+SERVER_LIST=${SERVERS_PARAM#[}
+SERVER_LIST=${SERVER_LIST%]}
+IFS=',' read -ra SERVER_ARRAY <<< "$SERVER_LIST"
+
+for SERVER in "${SERVER_ARRAY[@]}"; do
+    SERVER=$(echo "$SERVER" | tr -d '"' | tr -d ' ')
+    
+    if ! [[ $SERVER =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Error: Invalid IP address format: $SERVER"
+        echo "IP addresses should be in format: xxx.xxx.xxx.xxx"
+        exit 1
+    fi
+done
+
+echo "Valid servers configuration detected: $SERVERS_PARAM"
+echo "Infisical token provided: $INFISICAL_TOKEN"
 
 parse_params() {
     local servers_param=""
