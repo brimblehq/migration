@@ -30,7 +30,7 @@ The script installs and configures:
 ### Basic Command Structure
 
 ```bash
-sudo ./setup.sh --servers=["ip1","ip2","ip3"] --infisical_token=your_token_here
+sudo ./setup.sh --servers=["ip1","ip2","ip3"] --infisical_token=your_token_here --git_user=your_git_username --git_password=your_git_password
 ```
 
 ### Parameters
@@ -45,10 +45,15 @@ sudo ./setup.sh --servers=["ip1","ip2","ip3"] --infisical_token=your_token_here
    - Format: String
    - Example: `--infisical_token=your_token_here`
 
+3. `--git_user`: Your Git username
+   - Required
+   - Format: String
+   - Example: `--git_user=your_git_username`
+
 ### Example
 
 ```bash
-sudo ./setup.sh --servers=["192.168.1.100","192.168.1.101","192.168.1.102"] --infisical_token=inf.12345.abcdef
+sudo ./setup.sh --servers=["192.168.1.100","192.168.1.101","192.168.1.102"] --infisical_token=inf.12345.abcdef --git_user=your_git_username --git_password=your_git_password
 ```
 
 ## Firewall Configuration
