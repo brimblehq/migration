@@ -1,6 +1,47 @@
 #!/bin/bash
 
 INFISICAL_TOKEN=""
+SERVERS_PARAM=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --servers=*)
+            SERVERS_PARAM="${1#*=}"
+            shift
+            ;;
+        --infisical_token=*)
+            INFISICAL_TOKEN="${1#*=}"
+            shift
+            ;;
+        *)
+            echo "Error: Unknown parameter '$1'"
+            echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token"
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$SERVERS_PARAM" ]; then
+    echo "Error: --servers parameter is required"
+    echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token"
+    exit 1
+fi
+
+if [ -z "$INFISICAL_TOKEN" ]; then
+    echo "Error: --infisical_token parameter is required"
+    echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token"
+    exit 1
+fi
+
+SERVERS_PARAM=$(echo "$SERVERS_PARAM" | tr -d ' ')
+if [[ ! "$SERVERS_PARAM" =~ ^\[\".*\"\]$ ]]; then
+    echo "Error: Invalid servers format."
+    echo -e "Usage:\n./setup.sh --servers=[\"ip1\",\"ip2\",\"ip3\"] --infisical_token=your_token\n"
+    echo "Example:"
+    echo -e "./setup.sh --servers=[\"192.168.1.100\",\"192.168.1.101\",\"192.168.1.102\"] --infisical_token=your_token"
+    exit 1
+fi
+
 
 parse_params() {
     local servers_param=""
