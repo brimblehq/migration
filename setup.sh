@@ -389,6 +389,22 @@ sudo systemctl enable consul
 
 sudo systemctl start consul
 
+format_servers_for_nomad() {
+    local servers_json="$1"
+    servers_json=${servers_json#[}
+    servers_json=${servers_json%]}
+    IFS=',' read -ra server_array <<< "$servers_json"
+    
+    local nomad_servers="["
+    for server in "${server_array[@]}"; do
+        server=$(echo "$server" | tr -d '"' | tr -d ' ')
+        nomad_servers="$nomad_servers\"$server\", "
+    done
+    nomad_servers=${nomad_servers%, }]
+    
+    echo "$nomad_servers"
+}
+
 NOMAD_SERVERS=$(format_servers_for_nomad "$SERVERS_PARAM")
 
 NOMAD_CONFIG="data_dir = \"/opt/nomad\"
