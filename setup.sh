@@ -457,3 +457,5 @@ echo "Nomad configuration has been written to /etc/nomad.d/nomad.hcl"
 sudo systemctl enable nomad
 
 sudo systemctl start nomad
+
+echo "Runner setup completed successfully 🎉"
