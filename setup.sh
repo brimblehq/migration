@@ -149,8 +149,8 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo 
 sudo apt update -y
 sudo apt install caddy -y
 
-sudo systemctl enable caddy -y
-sudo systemctl start caddy -y
+sudo systemctl enable caddy
+sudo systemctl start caddy
 
 sudo apt install redis-server -y
 
