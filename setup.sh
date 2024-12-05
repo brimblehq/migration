@@ -219,7 +219,7 @@ if [ $? -ne 0 ]; then
 fi
 
 cd /brimble/runner
-export INFISICAL_TOKEN=value-here
+export INFISICAL_TOKEN=$INFISICAL_TOKEN
 yarn install && yarn build && yarn pm2
 
 sudo systemctl enable redis-server
