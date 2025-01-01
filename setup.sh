@@ -149,8 +149,8 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo 
 sudo apt update -y
 sudo apt install caddy -y
 
-sudo systemctl enable caddy -y
-sudo systemctl start caddy -y
+sudo systemctl enable caddy
+sudo systemctl start caddy
 
 sudo apt install redis-server -y
 
@@ -219,7 +219,7 @@ if [ $? -ne 0 ]; then
 fi
 
 cd /brimble/runner
-export INFISICAL_TOKEN=value-here
+export INFISICAL_TOKEN=$INFISICAL_TOKEN
 yarn install && yarn build && yarn pm2
 
 sudo systemctl enable redis-server
@@ -316,7 +316,7 @@ export ARCH_CNI=$( [ $(uname -m) = aarch64 ] && echo arm64 || echo amd64)
 
 export CNI_PLUGIN_VERSION=v1.5.1
 
-curl -L -o cni-plugins.tgz "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGIN_VERSION}/cni-plugins-linux-${ARCH_CNI}-${CNI_PLUGIN_VERSION}".tgz && \
+curl -L -o cni-plugins.tgz "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGIN_VERSION}/cni-plugins-linux-${ARCH_CNI}-${CNI_PLUGIN_VERSION}".tgz
 
 curl -1sLf 'https://cdn.brimble.io/consul.sh' | sudo bash
 
