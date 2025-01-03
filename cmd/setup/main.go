@@ -94,5 +94,5 @@ func main() {
 	}
 
 	wg.Wait()
-	log.Println("Infrastructure setup completed")
+	log.Println("Infrastructure setup completed ✅")
 }
