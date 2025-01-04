@@ -23,11 +23,6 @@ job "grafana" {
         type     = "tcp"
         interval = "10s"
         timeout  = "2s"
-        check_restart {
-          limit = 3
-          grace = "180s"
-          ignore_warnings = false
-        }
       }
     }
 

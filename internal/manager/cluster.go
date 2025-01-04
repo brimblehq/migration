@@ -11,8 +11,8 @@ type ClusterManager struct {
 	RoleMapping map[string][]types.ClusterRole
 }
 
-func NewClusterRoles(servers []types.Server) *ClusterManager {
-	totalNodes := len(servers)
+func NewClusterRoles(machines []types.Server) *ClusterManager {
+	totalNodes := len(machines)
 	var serverNodes int
 
 	switch totalNodes {
@@ -24,7 +24,7 @@ func NewClusterRoles(servers []types.Server) *ClusterManager {
 
 	serverHosts := make([]string, serverNodes)
 	for i := 0; i < serverNodes; i++ {
-		serverHosts[i] = servers[i].Host
+		serverHosts[i] = machines[i].Host
 	}
 
 	return &ClusterManager{
@@ -35,13 +35,13 @@ func NewClusterRoles(servers []types.Server) *ClusterManager {
 	}
 }
 
-func (cm *ClusterManager) CalculateRoles(servers []types.Server) {
-	for i, server := range servers {
+func (cm *ClusterManager) CalculateRoles(machines []types.Server) {
+	for i, machine := range machines {
 		roles := []types.ClusterRole{types.RoleClient}
 		if i < cm.ServerNodes {
 			roles = append(roles, types.RoleServer)
 		}
-		cm.RoleMapping[server.Host] = roles
+		cm.RoleMapping[machine.Host] = roles
 	}
 }
 

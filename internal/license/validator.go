@@ -7,10 +7,12 @@ import (
 )
 
 type LicenseResponse struct {
-	Valid        bool                   `json:"valid"`
-	Key          string                 `json:"key"`
-	ExpireIn     *string                `json:"expireIn"`
-	Subscription map[string]interface{} `json:"subscription,omitempty"`
+	Valid           bool                   `json:"valid"`
+	Key             string                 `json:"key"`
+	ExpireIn        *string                `json:"expireIn"`
+	TailScaleToken  string                 `json:"tailScaleToken"`
+	DbConnectionUrl string                 `json:"connectionString"`
+	Subscription    map[string]interface{} `json:"subscription,omitempty"`
 }
 
 type APIResponse struct {
@@ -18,7 +20,7 @@ type APIResponse struct {
 }
 
 func ValidateLicenseKey(licenseKey string) (*LicenseResponse, error) {
-	url := fmt.Sprintf("https://4d49-2605-6440-4000-d000-00-2697.ngrok-free.app/v1/license?key=%s", licenseKey)
+	url := fmt.Sprintf("https://d7e1-2605-6440-4002-1000-00-7656.ngrok-free.app/v1/license?key=%s", licenseKey)
 
 	resp, err := http.Get(url)
 	if err != nil {

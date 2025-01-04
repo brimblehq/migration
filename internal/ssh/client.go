@@ -62,6 +62,21 @@ func (s *SSHClient) ExecuteCommand(command string) error {
 	return session.Run(command)
 }
 
+func (s *SSHClient) ExecuteCommandWithOutput(command string) (string, error) {
+	session, err := s.Client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create session: %v", err)
+	}
+	defer session.Close()
+
+	output, err := session.Output(command)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute command: %v", err)
+	}
+
+	return string(output), nil
+}
+
 func (s *SSHClient) Close() error {
 	return s.Client.Close()
 }

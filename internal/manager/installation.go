@@ -6,25 +6,30 @@ import (
 	"strings"
 
 	"github.com/brimblehq/migration/assets"
+	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 )
 
 type InstallationManager struct {
-	sshClient *ssh.SSHClient
-	server    types.Server
-	roles     []types.ClusterRole
-	config    *types.Config
-	files     embed.FS
+	sshClient      *ssh.SSHClient
+	server         types.Server
+	roles          []types.ClusterRole
+	config         *types.Config
+	files          embed.FS
+	tailScaleToken string
+	DB             *db.PostgresDB
 }
 
-func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config) *InstallationManager {
+func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config, tailScaleToken string, db *db.PostgresDB) *InstallationManager {
 	return &InstallationManager{
-		sshClient: client,
-		server:    server,
-		roles:     roles,
-		config:    config,
-		files:     assets.MonitoringFiles,
+		sshClient:      client,
+		server:         server,
+		roles:          roles,
+		config:         config,
+		files:          assets.MonitoringFiles,
+		tailScaleToken: tailScaleToken,
+		DB:             db,
 	}
 }
 
@@ -36,6 +41,8 @@ func (im *InstallationManager) InstallBasePackages() error {
 
 		"sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl",
 		"sudo apt update -y",
+
+		fmt.Sprintf("curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up --auth-key=%s && tailscale up", im.tailScaleToken),
 
 		"curl -fsSL https://get.docker.com -o get-docker.sh",
 		"sudo sh get-docker.sh",
@@ -153,12 +160,36 @@ func quoteServerAddresses(addresses []string) []string {
 }
 
 func (im *InstallationManager) SetupNomad() error {
+	var serverBlock, clientBlock string
+
 	isServer := false
+	isClient := false
 	for _, role := range im.roles {
 		if role == types.RoleServer {
 			isServer = true
-			break
 		}
+		if role == types.RoleClient {
+			isClient = true
+		}
+	}
+
+	if isServer {
+		serverBlock = fmt.Sprintf(`
+server {
+    enabled = true
+    bootstrap_expect = %d
+    server_join {
+        retry_join = [%s]
+    }
+}`, im.getServerCount(), strings.Join(quoteServerAddresses(im.getNomadServerAddresses()), ", "))
+	}
+
+	if isClient {
+		clientBlock = fmt.Sprintf(`
+client {
+    enabled = true
+    servers = [%s]
+}`, strings.Join(quoteServerAddresses(im.getNomadServerAddresses()), ", "))
 	}
 
 	nomadConfig := fmt.Sprintf(`
@@ -167,54 +198,45 @@ data_dir = "/opt/nomad/data"
 bind_addr = "%s"
 
 advertise {
-   http = "%s:4646"
-   rpc = "%s:4647"
-   serf = "%s:4648"
+    http = "%s:4646"
+    rpc = "%s:4647"
+    serf = "%s:4648"
 }
-
-server {
-   enabled = %t
-   bootstrap_expect = %d
-}
-
-client {
-   enabled = true
-   servers = [%s]
-}
+%s
+%s
 
 consul {
-   address = "127.0.0.1:8500"
-   token = "%s"
-   client_service_name = "nomad-client-%d"
-   auto_advertise = true
-   server_auto_join = true
-   client_auto_join = true
+    address = "127.0.0.1:8500"
+    token = "%s"
+    client_service_name = "nomad-client-%d"
+    auto_advertise = true
+    server_auto_join = true
+    client_auto_join = true
 }
 
 plugin "docker" {
-   config {
-       allow_privileged = true
-       volumes {
-           enabled = true
-       }
-   }
+    config {
+        allow_privileged = true
+        volumes {
+            enabled = true
+        }
+    }
 }
 
 telemetry {
-   collection_interval = "1s"
-   disable_hostname = true
-   prometheus_metrics = true
-   publish_allocation_metrics = true
-   publish_node_metrics = true
+    collection_interval = "1s"
+    disable_hostname = true
+    prometheus_metrics = true
+    publish_allocation_metrics = true
+    publish_node_metrics = true
 }`,
 		im.config.ClusterConfig.ConsulConfig.DataCenter,
 		im.server.PrivateIP,
 		im.server.PrivateIP,
 		im.server.PrivateIP,
 		im.server.PrivateIP,
-		isServer,
-		im.getServerCount(),
-		strings.Join(quoteServerAddresses(im.getNomadServerAddresses()), ", "),
+		serverBlock,
+		clientBlock,
 		im.config.ClusterConfig.ConsulConfig.Token,
 		im.getMachineNumber(),
 	)

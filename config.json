@@ -1,39 +1,23 @@
 {
     "servers": [
       {
-        "host": "machine1.example.com",
-        "username": "ubuntu", 
+        "host": "test",
+        "username": "root", 
         "key_path": "~/.ssh/id_rsa",
         "datacenter": "dc1",
-        "public_ip": "x.x.x.x",
-        "private_ip": "y.y.y.y"
-      },
-      {
-        "host": "machine2.example.com",
-        "username": "ubuntu",
-        "key_path": "~/.ssh/id_rsa", 
-        "datacenter": "dc1",
-        "public_ip": "x.x.x.x",
-        "private_ip": "y.y.y.y"
-      },
-      {
-        "host": "machine3.example.com", 
-        "username": "ubuntu",
-        "key_path": "~/.ssh/id_rsa",
-        "datacenter": "dc1",
-        "public_ip": "x.x.x.x",
-        "private_ip": "y.y.y.y"
+        "public_ip": "188.166.158.90",
+        "private_ip": "10.106.0.3"
       }
     ],
     "cluster_config": {
       "consul": {
-        "server_address": "your-consul-server:8500",
-        "token": "your-consul-token",
+        "server_address": "209.97.138.138:8500",
+        "token": "14f1f8a7-08cb-20d5-7ee3-621624225a68",
         "datacenter": "dc1",
         "consul_image": "hashicorp/consul:1.16"
       },
       "monitoring": {
-        "grafana_password": "your-secure-password",
+        "grafana_password": "password",
         "metrics_port": 9100
       },
       "versions": {
