@@ -1,9 +1,11 @@
 package manager
 
 import (
+	"embed"
 	"fmt"
 	"strings"
 
+	"github.com/brimblehq/migration/assets"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 )
@@ -13,6 +15,7 @@ type InstallationManager struct {
 	server    types.Server
 	roles     []types.ClusterRole
 	config    *types.Config
+	files     embed.FS
 }
 
 func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config) *InstallationManager {
@@ -21,6 +24,7 @@ func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []
 		server:    server,
 		roles:     roles,
 		config:    config,
+		files:     assets.MonitoringFiles,
 	}
 }
 
@@ -28,10 +32,15 @@ func (im *InstallationManager) InstallBasePackages() error {
 	commands := []string{
 		"sudo apt-get update",
 		"sudo apt-get upgrade -y",
+		"sudo apt install curl unzip wget ufw coreutils gpg -y",
+
+		"sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl",
+		"sudo apt update -y",
 
 		"curl -fsSL https://get.docker.com -o get-docker.sh",
 		"sudo sh get-docker.sh",
 		"sudo usermod -aG docker $USER",
+		"sudo apt install docker-compose -y",
 
 		fmt.Sprintf("curl -fsSL https://deb.nodesource.com/setup_%s | sudo -E bash -", im.config.ClusterConfig.Versions.NodeJS),
 		"sudo apt-get install -y nodejs",
@@ -41,6 +50,21 @@ func (im *InstallationManager) InstallBasePackages() error {
 		"sudo apt-get install -y redis-server",
 		"sudo systemctl enable redis-server",
 		"sudo systemctl start redis-server",
+
+		"curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
+		"export NVM_DIR=\"$HOME/.nvm\"",
+		"[ -s \"$NVM_DIR/nvm.sh\" ] && \\. \"$NVM_DIR/nvm.sh\"",
+		"[ -s \"$NVM_DIR/bash_completion\" ] && \\. \"$NVM_DIR/bash_completion\"",
+
+		"nvm install --lts",
+		"nvm use --lts",
+
+		"sudo npm install --global yarn",
+
+		"curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash",
+		"sudo apt-get update && sudo apt-get install -y infisical",
+
+		"curl -sSL https://nixpacks.com/install.sh | bash",
 
 		fmt.Sprintf(`curl -fsSL https://releases.hashicorp.com/nomad/%s/nomad_%s_linux_amd64.zip -o nomad.zip`,
 			im.config.ClusterConfig.Versions.Nomad,
@@ -52,6 +76,12 @@ func (im *InstallationManager) InstallBasePackages() error {
 		"curl -fsSL https://cdn.brimble.io/runner.sh -o runner.sh",
 		"sudo chmod +x runner.sh",
 		"sudo mv runner.sh /usr/local/bin/runner",
+
+		"export ARCH_CNI=$( [ $(uname -m) = aarch64 ] && echo arm64 || echo amd64)",
+		"export CNI_PLUGIN_VERSION=v1.5.1",
+		"curl -L -o cni-plugins.tgz \"https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGIN_VERSION}/cni-plugins-linux-${ARCH_CNI}-${CNI_PLUGIN_VERSION}.tgz\"",
+		"sudo mkdir -p /opt/cni/bin",
+		"sudo tar -C /opt/cni/bin -xzf cni-plugins.tgz",
 	}
 
 	for _, cmd := range commands {
@@ -206,5 +236,5 @@ telemetry {
 }
 
 func (im *InstallationManager) StartRunner(licenseToken string) error {
-	return im.sshClient.ExecuteCommand(fmt.Sprintf("/usr/local/bin/runner  --license-key=%s", licenseToken))
+	return im.sshClient.ExecuteCommand(fmt.Sprintf("runner  --license-key=%s", licenseToken))
 }

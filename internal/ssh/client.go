@@ -11,7 +11,7 @@ import (
 )
 
 type SSHClient struct {
-	client *ssh.Client
+	Client *ssh.Client
 	config *ssh.ClientConfig
 }
 
@@ -44,13 +44,13 @@ func NewSSHClient(server types.Server) (*SSHClient, error) {
 	}
 
 	return &SSHClient{
-		client: client,
+		Client: client,
 		config: config,
 	}, nil
 }
 
 func (s *SSHClient) ExecuteCommand(command string) error {
-	session, err := s.client.NewSession()
+	session, err := s.Client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session: %v", err)
 	}
@@ -63,5 +63,5 @@ func (s *SSHClient) ExecuteCommand(command string) error {
 }
 
 func (s *SSHClient) Close() error {
-	return s.client.Close()
+	return s.Client.Close()
 }

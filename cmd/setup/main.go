@@ -1,9 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/brimblehq/migration/internal/types"
@@ -12,17 +13,23 @@ import (
 	"github.com/brimblehq/migration/internal/license"
 	"github.com/brimblehq/migration/internal/manager"
 	"github.com/brimblehq/migration/internal/ssh"
-
-	"gopkg.in/yaml.v2"
 )
 
 func main() {
 	licenseKey := flag.String("license-key", "", "License key for runner")
 
+	configPath := flag.String("config", "config.json", "Path to config file")
+
 	flag.Parse()
 
 	if *licenseKey == "" {
 		log.Fatal("License key is required")
+	}
+
+	configFile, err := os.ReadFile(*configPath)
+
+	if err != nil {
+		log.Fatalf("Error reading config file: %v", err)
 	}
 
 	licenseResp, err := license.ValidateLicenseKey(*licenseKey)
@@ -31,15 +38,8 @@ func main() {
 		log.Fatal("Invalid license key")
 	}
 
-	data, err := ioutil.ReadFile("nomad_config.yaml")
-
-	if err != nil {
-		log.Fatalf("Error reading config file: %v", err)
-	}
-
 	var config types.Config
-
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err := json.Unmarshal(configFile, &config); err != nil {
 		log.Fatalf("Error parsing config: %v", err)
 	}
 

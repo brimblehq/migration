@@ -2,119 +2,97 @@ package manager
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
 func (im *InstallationManager) SetupMonitoring() error {
-	if im.server.Host == im.config.Servers[0].Host {
-		return nil
+	if err := im.waitForNomadCluster(); err != nil {
+		return fmt.Errorf("nomad not ready: %v", err)
 	}
-	return im.setupMonitoringServer()
+
+	machineID, err := im.getMachineID()
+	if err != nil {
+		return fmt.Errorf("failed to get machine-id: %v", err)
+	}
+
+	entries, err := im.files.ReadDir("monitoring")
+	if err != nil {
+		return fmt.Errorf("failed to read monitoring directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".nomad") {
+			continue
+		}
+
+		jobContent, err := im.files.ReadFile(filepath.Join("monitoring", entry.Name()))
+		if err != nil {
+			return fmt.Errorf("failed to read job file %s: %v", entry.Name(), err)
+		}
+
+		modifiedJob := im.modifyServiceName(string(jobContent), machineID)
+
+		tempFile := fmt.Sprintf("/tmp/%s", entry.Name())
+		if err := im.sshClient.ExecuteCommand(fmt.Sprintf(`echo '%s' > %s`, modifiedJob, tempFile)); err != nil {
+			return fmt.Errorf("failed to create temporary job file: %v", err)
+		}
+
+		if err := im.sshClient.ExecuteCommand(fmt.Sprintf("nomad job run %s", tempFile)); err != nil {
+			return fmt.Errorf("failed to run job %s: %v", entry.Name(), err)
+		}
+
+		im.sshClient.ExecuteCommand(fmt.Sprintf("rm %s", tempFile))
+	}
+
+	return nil
 }
 
-func (im *InstallationManager) setupMonitoringServer() error {
-	prometheusCmd := `docker run -d \
-        --name prometheus \
-        --restart=unless-stopped \
-        -v /etc/prometheus-config.yml:/etc/prometheus/prometheus.yml \
-        -p 9090:9090 \
-        prom/prometheus:latest`
+func (im *InstallationManager) modifyServiceName(jobContent string, machineID string) string {
+	lines := strings.Split(jobContent, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "name = ") && strings.Contains(line, "service") {
+			parts := strings.Split(line, "=")
+			if len(parts) != 2 {
+				continue
+			}
 
-	grafanaCmd := `docker run -d \
-        --name grafana \
-        --restart=unless-stopped \
-        -p 3000:3000 \
-        grafana/grafana:latest`
+			serviceName := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
 
-	commands := []string{
-		im.generatePrometheusConfig(),
-		prometheusCmd,
-		grafanaCmd,
-	}
+			newServiceName := fmt.Sprintf(`      name = "%s-%s"`, serviceName, machineID)
 
-	for _, cmd := range commands {
-		if err := im.sshClient.ExecuteCommand(cmd); err != nil {
-			return fmt.Errorf("monitoring server setup failed: %v", err)
+			lines[i] = newServiceName
 		}
 	}
 
-	if err := im.waitForNomadCluster(); err != nil {
-		return err
-	}
-
-	return im.deployMonitoringJobs()
+	return strings.Join(lines, "\n")
 }
 
 func (im *InstallationManager) waitForNomadCluster() error {
 	maxRetries := 30
-	retryInterval := 10 * time.Second
-
 	for i := 0; i < maxRetries; i++ {
-		if err := im.checkNomadStatus(); err == nil {
+		if err := im.sshClient.ExecuteCommand("nomad status"); err == nil {
 			return nil
 		}
-		time.Sleep(retryInterval)
+		time.Sleep(10 * time.Second)
 	}
-	return fmt.Errorf("nomad cluster not ready after %v seconds", maxRetries*int(retryInterval.Seconds()))
+	return fmt.Errorf("nomad not ready after %d attempts", maxRetries)
 }
 
-func (im *InstallationManager) checkNomadStatus() error {
-	cmd := "nomad status"
-	return im.sshClient.ExecuteCommand(cmd)
-}
+func (im *InstallationManager) getMachineID() (string, error) {
+	cmd := "cat /etc/machine-id"
 
-func (im *InstallationManager) deployMonitoringJobs() error {
-	jobs := []string{
-		im.generateNodeExporterJob(),
-		im.generateCadvisorJob(),
-		im.generateLokiJob(),
-		im.generatePromtailJob(),
+	session, err := im.sshClient.Client.NewSession()
+	if err != nil {
+		return "", err
 	}
+	defer session.Close()
 
-	for _, jobSpec := range jobs {
-		if err := im.deployNomadJob(jobSpec); err != nil {
-			return fmt.Errorf("job deployment failed: %v", err)
-		}
-	}
-	return nil
-}
-
-func (im *InstallationManager) deployNomadJob(jobSpec string) error {
-	tempFile := fmt.Sprintf("/tmp/job-%d.hcl", time.Now().Unix())
-
-	writeCmd := fmt.Sprintf(`cat << 'EOF' > %s
-%s
-EOF`, tempFile, jobSpec)
-
-	if err := im.sshClient.ExecuteCommand(writeCmd); err != nil {
-		return err
+	output, err := session.Output(cmd)
+	if err != nil {
+		return "", err
 	}
 
-	deployCmd := fmt.Sprintf("nomad job run %s", tempFile)
-
-	if err := im.sshClient.ExecuteCommand(deployCmd); err != nil {
-		return err
-	}
-
-	return im.sshClient.ExecuteCommand(fmt.Sprintf("rm %s", tempFile))
-}
-
-func (im *InstallationManager) generatePrometheusConfig() string {
-	return ``
-}
-
-func (im *InstallationManager) generateNodeExporterJob() string {
-	return ``
-}
-
-func (im *InstallationManager) generateCadvisorJob() string {
-	return ``
-}
-
-func (im *InstallationManager) generateLokiJob() string {
-	return ``
-}
-
-func (im *InstallationManager) generatePromtailJob() string {
-	return ``
+	return strings.TrimSpace(string(output)), nil
 }
