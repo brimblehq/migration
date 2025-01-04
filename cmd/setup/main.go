@@ -185,11 +185,11 @@ func main() {
 					name string
 					fn   func() error
 				}{
-					// {"Installing base packages ", im.InstallBasePackages},
-					// {"Setting up Consul client", im.SetupConsulClient},
+					{"Installing base packages ", im.InstallBasePackages},
+					{"Setting up Consul client", im.SetupConsulClient},
 					{"Setting up Nomad", im.SetupNomad},
-					// {"Setting up monitoring", im.SetupMonitoring},
-					// {"Starting runner", func() error { return im.StartRunner(*licenseKey) }},
+					{"Setting up monitoring", im.SetupMonitoring},
+					{"Starting runner", func() error { return im.StartRunner(*licenseKey) }},
 				}
 
 				for _, step := range steps {
@@ -201,7 +201,7 @@ func main() {
 						if err := step.fn(); err != nil {
 							spinner.Stop(false)
 							errorChan <- fmt.Errorf("error during %s on %s: %v", step.name, server.Host, err)
-							cancel() // Signal other goroutines to stop
+							cancel()
 							return
 						}
 						spinner.Stop(true)
