@@ -1,6 +1,8 @@
 package manager
 
 import (
+	"log"
+
 	"github.com/brimblehq/migration/internal/types"
 )
 
@@ -27,6 +29,9 @@ func NewClusterRoles(machines []types.Server) *ClusterManager {
 		serverHosts[i] = machines[i].Host
 	}
 
+	log.Printf("Debug NewClusterRoles: Total nodes: %d, Server nodes: %d", totalNodes, serverNodes)
+	log.Printf("Debug NewClusterRoles: Server hosts: %v", serverHosts)
+
 	return &ClusterManager{
 		TotalNodes:  totalNodes,
 		ServerNodes: serverNodes,
@@ -42,6 +47,7 @@ func (cm *ClusterManager) CalculateRoles(machines []types.Server) {
 			roles = append(roles, types.RoleServer)
 		}
 		cm.RoleMapping[machine.Host] = roles
+		log.Printf("Debug CalculateRoles: Server %s (index %d) assigned roles: %v", machine.Host, i, roles)
 	}
 }
 

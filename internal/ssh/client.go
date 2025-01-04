@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/brimblehq/migration/internal/types"
@@ -16,14 +18,23 @@ type SSHClient struct {
 }
 
 func NewSSHClient(server types.Server) (*SSHClient, error) {
-	key, err := ioutil.ReadFile(os.ExpandEnv(server.KeyPath))
+	keyPath := server.KeyPath
 
-	if err != nil {
-		return nil, fmt.Errorf("unable to read private key: %v", err)
+	if strings.HasPrefix(keyPath, "~") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve home directory: %v", err)
+		}
+		keyPath = filepath.Join(homeDir, keyPath[1:])
 	}
 
-	signer, err := ssh.ParsePrivateKey(key)
+	key, err := ioutil.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("%v: unable to read private key: %v", server, err)
+	}
 
+	passphrase := []byte("password")
+	signer, err := ssh.ParsePrivateKeyWithPassphrase(key, passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse private key: %v", err)
 	}
@@ -38,7 +49,6 @@ func NewSSHClient(server types.Server) (*SSHClient, error) {
 	}
 
 	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", server.Host), config)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to %s: %v", server.Host, err)
 	}

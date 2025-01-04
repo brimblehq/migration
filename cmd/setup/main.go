@@ -20,7 +20,7 @@ import (
 
 func main() {
 	licenseKey := flag.String("license-key", "", "License key for runner")
-	configPath := flag.String("config", "config.json", "Path to config file")
+	configPath := flag.String("config", "./config.json", "Path to config file")
 
 	flag.Parse()
 
@@ -35,6 +35,7 @@ func main() {
 	}
 
 	licenseResp, err := license.ValidateLicenseKey(*licenseKey)
+
 	if err != nil || !licenseResp.Valid {
 		log.Fatal("Invalid license key")
 	}
@@ -44,6 +45,26 @@ func main() {
 	if err := json.Unmarshal(configFile, &config); err != nil {
 		log.Fatalf("Error parsing config: %v", err)
 	}
+
+	log.Printf("\n=== Configuration Details ===")
+	log.Printf("Servers:")
+	for i, server := range config.Servers {
+		log.Printf("  Server %d:", i+1)
+		log.Printf("    Host: %s", server.Host)
+		log.Printf("    Username: %s", server.Username)
+		log.Printf("    KeyPath: %s", server.KeyPath)
+		log.Printf("    Datacenter: %s", server.DataCenter)
+		log.Printf("    Public IP: %s", server.PublicIP)
+		log.Printf("    Private IP: %s", server.PrivateIP)
+	}
+
+	log.Printf("\nCluster Config:")
+	log.Printf("  Consul:")
+	log.Printf("    Server Address: %s", config.ClusterConfig.ConsulConfig.ServerAddress)
+	log.Printf("    Token: %s", config.ClusterConfig.ConsulConfig.Token)
+	log.Printf("    Datacenter: %s", config.ClusterConfig.ConsulConfig.DataCenter)
+	log.Printf("    Consul Image: %s", config.ClusterConfig.ConsulConfig.ConsulImage)
+	log.Printf("\n========================")
 
 	if licenseResp.DbConnectionUrl == "" || strings.TrimSpace(licenseResp.DbConnectionUrl) == "" {
 		log.Fatal("Unable to setup this installation")
@@ -87,8 +108,6 @@ func main() {
 		existingIPs[configServer.PrivateIP] = true
 	}
 
-	allServers = append(allServers, config.Servers...)
-
 	clusterRoles := manager.NewClusterRoles(allServers)
 
 	clusterRoles.CalculateRoles(config.Servers)
@@ -114,6 +133,8 @@ func main() {
 				spinner := ui.NewStepSpinner(server.Host)
 
 				client, err := ssh.NewSSHClient(server)
+
+				fmt.Printf("ssh clients: %v", client)
 
 				if err != nil {
 					spinner.Start("Connecting to server")
@@ -164,11 +185,11 @@ func main() {
 					name string
 					fn   func() error
 				}{
-					{"Installing base packages", im.InstallBasePackages},
-					{"Setting up Consul client", im.SetupConsulClient},
+					// {"Installing base packages ", im.InstallBasePackages},
+					// {"Setting up Consul client", im.SetupConsulClient},
 					{"Setting up Nomad", im.SetupNomad},
-					{"Setting up monitoring", im.SetupMonitoring},
-					{"Starting runner", func() error { return im.StartRunner(*licenseKey) }},
+					// {"Setting up monitoring", im.SetupMonitoring},
+					// {"Starting runner", func() error { return im.StartRunner(*licenseKey) }},
 				}
 
 				for _, step := range steps {

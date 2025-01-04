@@ -18,7 +18,10 @@ type Config struct {
 }
 
 func NewPostgresDB(config Config) (*PostgresDB, error) {
-	db, err := sql.Open("postgres", config.URI)
+	// fmt.Println(config.URI)
+	// postgresql://postgres:xhGUnf75yy3Afyb@db.bwpuiyfchjkhezkypxpm.supabase.co:5432/postgres
+
+	db, err := sql.Open("postgres", "postgresql://ileri:password@localhost:5411/defaultdb?sslmode=disable")
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to database: %v", err)
 	}
