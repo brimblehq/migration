@@ -37,14 +37,22 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $LATEST_TAG"
 
-          # Generate the next version (e.g., increment patch version)
           NEXT_TAG=$(semver bump patch "$LATEST_TAG")
           echo "Generated tag: $NEXT_TAG"
+
+          if git rev-parse "$NEXT_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEXT_TAG already exists, skipping tag creation"
+            echo "TAG_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "Tag $NEXT_TAG does not exist, will create"
+            echo "TAG_EXISTS=false" >> $GITHUB_ENV
+          fi
 
           # Expose the tag as an environment variable
           echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
 
       - name: Create Tag
+        if: env.TAG_EXISTS == 'false'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
@@ -52,6 +60,7 @@ jobs:
           git push origin "$NEXT_TAG"
 
       - name: Run GoReleaser
+        if: env.TAG_EXISTS == 'false'
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
