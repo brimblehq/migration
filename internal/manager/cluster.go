@@ -69,10 +69,16 @@ func (im *InstallationManager) VerifyMachineRequirement() error {
 	var cores int
 	var memoryGB int
 
+	// standardRequirement := &StandardRequirement{
+	// 	Cpu:     2,
+	// 	Memory:  32,
+	// 	Storage: 20,
+	// }
+
 	standardRequirement := &StandardRequirement{
-		Cpu:     2,
-		Memory:  32,
-		Storage: 20,
+		Cpu:     1,
+		Memory:  1,
+		Storage: 10,
 	}
 
 	commands := []string{
@@ -90,31 +96,28 @@ func (im *InstallationManager) VerifyMachineRequirement() error {
 		switch command {
 		case "nproc":
 			cores, _ = strconv.Atoi(strings.TrimSpace(result))
-			// fmt.Printf("CPU Cores: %d\n", cores)
 		case "df -k / | awk 'NR==2{print $4}'":
 			storage, _ := strconv.Atoi(strings.TrimSpace(result))
 			storageGB = float64(storage) / 1024 / 1024
-			// fmt.Printf("Storage: %.2f GB\n", storageGB)
 		case "free -k | awk '/^Mem:/ {print $2}'":
 			memory, _ := strconv.Atoi(strings.TrimSpace(result))
-			fmt.Printf("MEMORY HERE: %d", memory)
 			memoryGB = int(math.Round(float64(memory) / 1024 / 1024))
-			// fmt.Printf("Memory: %d GB\n", roundedMemoryGB)
 		}
 	}
 
-	fmt.Printf("Standard cpu: %d", standardRequirement.Cpu)
-
 	if cores < standardRequirement.Cpu {
-		return fmt.Errorf("the minimum number of required cpu cores for this installation is: %d", standardRequirement.Cpu)
+		return fmt.Errorf("insufficient CPU cores: have %d, need minimum of %d cores",
+			cores, standardRequirement.Cpu)
 	}
 
 	if memoryGB < standardRequirement.Memory {
-		return fmt.Errorf("the minimum number of required memory size for this installation is: %d", standardRequirement.Memory)
+		return fmt.Errorf("insufficient memory: have %d GB, need minimum of %d GB",
+			memoryGB, standardRequirement.Memory)
 	}
 
 	if storageGB < standardRequirement.Storage {
-		return fmt.Errorf("the minimum size of machine storage for this installation is: %f", standardRequirement.Storage)
+		return fmt.Errorf("insufficient storage: have %.2f GB, need minimum of %.2f GB",
+			storageGB, standardRequirement.Storage)
 	}
 
 	return nil

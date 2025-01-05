@@ -4,8 +4,8 @@ go 1.21.6
 
 require (
 	github.com/briandowns/spinner v1.23.1
+	github.com/infisical/go-sdk v0.4.7
 	golang.org/x/crypto v0.31.0
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -35,15 +35,6 @@ require (
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.5 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/hashicorp/cronexpr v1.1.2 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
-	github.com/infisical/go-sdk v0.4.7 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
@@ -64,7 +55,6 @@ require (
 
 require (
 	github.com/fatih/color v1.7.0 // indirect
-	github.com/hashicorp/nomad/api v0.0.0-20250103103843-6469b59a0a59
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.8 // indirect

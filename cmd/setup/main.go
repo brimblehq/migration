@@ -21,12 +21,24 @@ import (
 
 func main() {
 	licenseKey := flag.String("license-key", "", "License key for runner")
+	instances := flag.String("instances", "6", "Number of instances for your brimble builder")
 	configPath := flag.String("config", "./config.json", "Path to config file")
+
+	flag.Usage = func() {
+		ui.PrintBanner(false)
+	}
 
 	flag.Parse()
 
+	if len(os.Args) < 2 {
+		ui.PrintBanner()
+		os.Exit(1)
+	}
+
 	if *licenseKey == "" {
 		log.Fatal("License key is required")
+		ui.PrintBanner()
+		os.Exit(1)
 	}
 
 	configFile, err := os.ReadFile(*configPath)
@@ -125,8 +137,6 @@ func main() {
 		if existingInfo, exists := existingIPs[configServer.PrivateIP]; exists {
 			if existingInfo.step != types.StepCompleted {
 				allServers = append(allServers, configServer)
-				// log.Printf("Server %s found in incomplete state (step: %s), will resume setup",
-				// 	configServer.Host, existingInfo.step)
 			}
 			continue
 		}
@@ -145,7 +155,6 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// In your main.go
 	for _, server := range config.Servers {
 		wg.Add(1)
 
@@ -196,7 +205,10 @@ func main() {
 
 				roles := clusterRoles.RoleMapping[server.Host]
 
-				currentStep, err := database.GetServerStep(machineID)
+				currentStep, err := database.GetServerStep(machineID, licenseResp.Subscription.ID)
+
+				log.Printf("Debug: Current step for server %s: %s", server.Host, currentStep)
+
 				if err != nil {
 					role := "client"
 					if len(roles) > 1 {
@@ -227,12 +239,12 @@ func main() {
 					step    types.ServerStep
 					require types.ServerStep
 				}{
-					// {
-					// 	name:    "Verifying machine requirements",
-					// 	fn:      im.VerifyMachineRequirement,
-					// 	step:    types.StepVerified,
-					// 	require: types.StepInitialized,
-					// },
+					{
+						name:    "Verifying machine requirements",
+						fn:      im.VerifyMachineRequirement,
+						step:    types.StepVerified,
+						require: types.StepInitialized,
+					},
 					{
 						name:    "Installing base packages",
 						fn:      im.InstallBasePackages,
@@ -259,41 +271,60 @@ func main() {
 					},
 					{
 						name:    "Starting runner",
-						fn:      func() error { return im.StartRunner(*licenseKey) },
+						fn:      func() error { return im.StartRunner(*licenseKey, *instances) },
 						step:    types.StepRunnerStarted,
 						require: types.StepMonitoringSetup,
 					},
 				}
+
+				stepOrder := map[types.ServerStep]int{
+					types.StepInitialized:     0,
+					types.StepVerified:        1,
+					types.StepBaseInstalled:   2,
+					types.StepConsulSetup:     3,
+					types.StepNomadSetup:      4,
+					types.StepMonitoringSetup: 5,
+					types.StepRunnerStarted:   6,
+					types.StepCompleted:       7,
+				}
+
+				currentStepOrder := stepOrder[currentStep]
 
 				for _, step := range steps {
 					select {
 					case <-ctx.Done():
 						return
 					default:
-						if currentStep > step.step {
-							continue
-						}
+						//log.Printf("Debug: Checking step %s (current: %v, required: %v)", step.name, currentStep, step.require)
 
-						if currentStep < step.require {
-							log.Printf("Prerequisite step %s not completed for %s", step.require, server.Host)
+						requiredStepOrder := stepOrder[step.require]
+						currentLoopStepOrder := stepOrder[step.step]
+
+						//log.Printf("Debug: Current step order: %d, Step loop order: %d, Required step order: %d", currentStepOrder, currentLoopStepOrder, requiredStepOrder)
+
+						if currentStepOrder < currentLoopStepOrder && currentStepOrder >= requiredStepOrder {
+							spinner.Start(step.name)
+							if err := step.fn(); err != nil {
+								spinner.Stop(false)
+								errorChan <- fmt.Errorf("error during %s on %s: %v", step.name, server.Host, err)
+								cancel()
+								return
+							}
+							//log.Printf("Debug: Successfully completed step %s, updating currentStep from %v to %v", step.name, currentStep, step.step)
+							currentStep = step.step
+							currentStepOrder = stepOrder[currentStep]
+							if err := database.UpdateServerStep(machineID, step.step); err != nil {
+								spinner.Stop(false)
+								log.Printf("Error updating step for server %s: %v", server.Host, err)
+								return
+							}
+							spinner.Stop(true)
+						} else if currentStepOrder >= currentLoopStepOrder {
+							//log.Printf("Debug: Skipping step %s as already completed", step.name)
+						} else {
+							//log.Printf("Debug: Cannot proceed with %s as prerequisite %s not met", step.name, step.require)
 							return
 						}
-
-						spinner.Start(step.name)
-						if err := step.fn(); err != nil {
-							spinner.Stop(false)
-							errorChan <- fmt.Errorf("error during %s on %s: %v", step.name, server.Host, err)
-							cancel()
-							return
-						}
-
-						if err := database.UpdateServerStep(machineID, step.step); err != nil {
-							spinner.Stop(false)
-							log.Printf("Error updating step for server %s: %v", server.Host, err)
-							return
-						}
-						currentStep = step.step
-						spinner.Stop(true)
 					}
 				}
 

@@ -3,6 +3,8 @@ package manager
 import (
 	"embed"
 	"fmt"
+	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -347,8 +349,37 @@ func (im *InstallationManager) SetupNomad() error {
 }
 
 func (im *InstallationManager) cleanupNomadState() error {
+	checkCmd := "systemctl is-active nomad || true"
+	status, err := im.sshClient.ExecuteCommandWithOutput(checkCmd)
+	if err != nil {
+		return fmt.Errorf("failed to check nomad status: %v", err)
+	}
+
+	if strings.TrimSpace(status) == "active" {
+		stopJobsCmd := "nomad job stop -purge -yes -detach '*'"
+		if err := im.sshClient.ExecuteCommand(stopJobsCmd); err != nil {
+			log.Printf("Note: Failed to stop nomad jobs: %v", err)
+		}
+
+		time.Sleep(10 * time.Second)
+
+		stopCmd := "sudo systemctl stop nomad"
+		if err := im.sshClient.ExecuteCommand(stopCmd); err != nil {
+			return fmt.Errorf("failed to stop nomad: %v", err)
+		}
+
+		time.Sleep(5 * time.Second)
+
+		killCmd := "sudo pkill -9 nomad || true"
+		if err := im.sshClient.ExecuteCommand(killCmd); err != nil {
+			log.Printf("Note: Failed to force kill nomad processes: %v", err)
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+
 	commands := []string{
-		"sudo systemctl stop nomad",
+		"for m in $(mount | grep nomad | awk '{print $3}'); do sudo umount $m || true; done",
 		"sudo rm -rf /opt/nomad/data/*",
 		"sudo rm -rf /opt/nomad/data/server/raft/*",
 		"sudo rm -f /etc/nomad.d/nomad.hcl",
@@ -462,6 +493,12 @@ func (im *InstallationManager) getSingleNodeConfig(nodeName string) string {
  }`, im.config.ClusterConfig.ConsulConfig.Token, nodeName)
 }
 
-func (im *InstallationManager) StartRunner(licenseToken string) error {
-	return im.sshClient.ExecuteCommand(fmt.Sprintf("runner  --license-key=%s", licenseToken))
+func (im *InstallationManager) StartRunner(licenseToken string, instances string) error {
+	instanceCount, err := strconv.Atoi(instances)
+	if err != nil {
+		return fmt.Errorf("invalid instances value: %v", err)
+	}
+
+	command := fmt.Sprintf("runner --license-key=%s --instances=%d", licenseToken, instanceCount)
+	return im.sshClient.ExecuteCommand(command)
 }

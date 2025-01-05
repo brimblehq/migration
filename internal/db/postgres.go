@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"time"
 
 	"github.com/brimblehq/migration/internal/types"
@@ -38,6 +39,17 @@ func (p *PostgresDB) Close() error {
 }
 
 func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string, identifier string, step types.ServerStep) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("SELECT pg_advisory_xact_lock($1)", hashString(machineID))
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %v", err)
+	}
+
 	query := `
         INSERT INTO servers (machine_id, public_ip, private_ip, role, status, identifier, step, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
@@ -45,7 +57,7 @@ func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string,
         SET status = $5, updated_at = $8
     `
 
-	_, err := p.db.Exec(query,
+	_, err = tx.Exec(query,
 		machineID,
 		publicIP,
 		privateIP,
@@ -56,7 +68,69 @@ func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string,
 		time.Now(),
 	)
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to execute query: %v", err)
+	}
+
+	return tx.Commit()
+}
+
+func (p *PostgresDB) UpdateServerRole(machineID, role string) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("SELECT pg_advisory_xact_lock($1)", hashString(machineID))
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %v", err)
+	}
+
+	query := `
+        UPDATE servers
+        SET role = $1, updated_at = $2
+        WHERE machine_id = $3
+    `
+
+	_, err = tx.Exec(query, role, time.Now(), machineID)
+	if err != nil {
+		return fmt.Errorf("failed to update role: %v", err)
+	}
+
+	return tx.Commit()
+}
+
+func (p *PostgresDB) UpdateServerStep(machineID string, step types.ServerStep) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("SELECT pg_advisory_xact_lock($1)", hashString(machineID))
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %v", err)
+	}
+
+	query := `
+        UPDATE servers 
+        SET step = $1, updated_at = $2
+        WHERE machine_id = $3
+    `
+
+	_, err = tx.Exec(query, step, time.Now(), machineID)
+	if err != nil {
+		return fmt.Errorf("failed to update step: %v", err)
+	}
+
+	return tx.Commit()
+}
+
+func hashString(s string) int64 {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return int64(h.Sum64())
 }
 
 func (p *PostgresDB) IsServerRegistered(machineID string) (bool, error) {
@@ -112,30 +186,9 @@ func (p *PostgresDB) GetAllServers() ([]types.ServerState, error) {
 	return servers, nil
 }
 
-func (p *PostgresDB) UpdateServerRole(machineID, role string) error {
-	query := `
-        UPDATE servers
-        SET role = $1, updated_at = $2
-        WHERE machine_id = $3
-    `
-
-	_, err := p.db.Exec(query, role, time.Now(), machineID)
-	return err
-}
-
-func (p *PostgresDB) UpdateServerStep(machineID string, step types.ServerStep) error {
-	query := `
-        UPDATE servers 
-        SET current_step = $1, updated_at = $2
-        WHERE machine_id = $3
-    `
-	_, err := p.db.Exec(query, step, time.Now(), machineID)
-	return err
-}
-
-func (p *PostgresDB) GetServerStep(machineID string) (types.ServerStep, error) {
+func (p *PostgresDB) GetServerStep(machineID string, identifier string) (types.ServerStep, error) {
 	var step types.ServerStep
-	query := `SELECT current_step FROM servers WHERE machine_id = $1`
-	err := p.db.QueryRow(query, machineID).Scan(&step)
+	query := `SELECT step FROM servers WHERE machine_id = $1 AND identifier = $2`
+	err := p.db.QueryRow(query, machineID, identifier).Scan(&step)
 	return step, err
 }
