@@ -46,25 +46,25 @@ func main() {
 		log.Fatalf("Error parsing config: %v", err)
 	}
 
-	log.Printf("\n=== Configuration Details ===")
-	log.Printf("Servers:")
-	for i, server := range config.Servers {
-		log.Printf("  Server %d:", i+1)
-		log.Printf("    Host: %s", server.Host)
-		log.Printf("    Username: %s", server.Username)
-		log.Printf("    KeyPath: %s", server.KeyPath)
-		log.Printf("    Datacenter: %s", server.DataCenter)
-		log.Printf("    Public IP: %s", server.PublicIP)
-		log.Printf("    Private IP: %s", server.PrivateIP)
-	}
+	// log.Printf("\n=== Configuration Details ===")
+	// log.Printf("Servers:")
+	// for i, server := range config.Servers {
+	// 	log.Printf("  Server %d:", i+1)
+	// 	log.Printf("    Host: %s", server.Host)
+	// 	log.Printf("    Username: %s", server.Username)
+	// 	log.Printf("    KeyPath: %s", server.KeyPath)
+	// 	log.Printf("    Datacenter: %s", server.DataCenter)
+	// 	log.Printf("    Public IP: %s", server.PublicIP)
+	// 	log.Printf("    Private IP: %s", server.PrivateIP)
+	// }
 
-	log.Printf("\nCluster Config:")
-	log.Printf("  Consul:")
-	log.Printf("    Server Address: %s", config.ClusterConfig.ConsulConfig.ServerAddress)
-	log.Printf("    Token: %s", config.ClusterConfig.ConsulConfig.Token)
-	log.Printf("    Datacenter: %s", config.ClusterConfig.ConsulConfig.DataCenter)
-	log.Printf("    Consul Image: %s", config.ClusterConfig.ConsulConfig.ConsulImage)
-	log.Printf("\n========================")
+	// log.Printf("\nCluster Config:")
+	// log.Printf("  Consul:")
+	// log.Printf("    Server Address: %s", config.ClusterConfig.ConsulConfig.ServerAddress)
+	// log.Printf("    Token: %s", config.ClusterConfig.ConsulConfig.Token)
+	// log.Printf("    Datacenter: %s", config.ClusterConfig.ConsulConfig.DataCenter)
+	// log.Printf("    Consul Image: %s", config.ClusterConfig.ConsulConfig.ConsulImage)
+	// log.Printf("\n========================")
 
 	if licenseResp.DbConnectionUrl == "" || strings.TrimSpace(licenseResp.DbConnectionUrl) == "" {
 		log.Fatal("Unable to setup this installation")
@@ -185,11 +185,12 @@ func main() {
 					name string
 					fn   func() error
 				}{
+					{"Verifying machine requirements ", im.VerifyMachineRequirement},
 					{"Installing base packages ", im.InstallBasePackages},
-					{"Setting up Consul client", im.SetupConsulClient},
-					{"Setting up Nomad", im.SetupNomad},
-					{"Setting up monitoring", im.SetupMonitoring},
-					{"Starting runner", func() error { return im.StartRunner(*licenseKey) }},
+					{"Setting up Consul client ", im.SetupConsulClient},
+					{"Setting up Nomad ", im.SetupNomad},
+					{"Setting up monitoring ", im.SetupMonitoring},
+					{"Starting runner ", func() error { return im.StartRunner(*licenseKey) }},
 				}
 
 				for _, step := range steps {
