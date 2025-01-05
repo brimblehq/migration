@@ -83,7 +83,7 @@ func GetDatabaseUrl(licenseKey string) (string, string, error) {
 	// 	return "", fmt.Errorf("invalid license key")
 	// }
 
-	return apiResp.Data.DatabaseURI, apiResp.Data.DatabaseURI, nil
+	return apiResp.Data.DatabaseURI, apiResp.Data.TailScaleToken, nil
 }
 
 func ValidateLicenseKey(licenseKey string, deviceId string, hostname string) (*LicenseResponse, error) {

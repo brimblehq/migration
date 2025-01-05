@@ -1,7 +1,9 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"time"
@@ -16,6 +18,17 @@ type PostgresDB struct {
 
 type Config struct {
 	URI string
+}
+
+type TempSSHKey struct {
+	ID                 int64      `json:"id"`
+	KeyID              string     `json:"key_id"`
+	PublicKey          string     `json:"public_key"`
+	CreatedAt          time.Time  `json:"created_at"`
+	ExpiresAt          time.Time  `json:"expires_at"`
+	Status             string     `json:"status"`
+	CleanupAttemptedAt *time.Time `json:"cleanup_attempted_at,omitempty"`
+	Servers            []string   `json:"servers"`
 }
 
 func NewPostgresDB(config Config) (*PostgresDB, error) {
@@ -191,4 +204,174 @@ func (p *PostgresDB) GetServerStep(machineID string, identifier string) (types.S
 	query := `SELECT step FROM servers WHERE machine_id = $1 AND identifier = $2`
 	err := p.db.QueryRow(query, machineID, identifier).Scan(&step)
 	return step, err
+}
+
+func (p *PostgresDB) CreateTempSSHKey(ctx context.Context, keyID, publicKey string, servers []string) (*TempSSHKey, error) {
+	serversJSON, err := json.Marshal(servers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal servers: %w", err)
+	}
+
+	var key TempSSHKey
+	var serversBytes []byte
+
+	err = p.db.QueryRowContext(ctx, `
+        INSERT INTO temp_ssh_keys (
+            key_id, 
+            public_key, 
+            expires_at, 
+            servers,
+            status
+        ) VALUES (
+            $1, 
+            $2, 
+            $3, 
+            $4,
+            'active'
+        ) RETURNING id, key_id, public_key, created_at, expires_at, status, cleanup_attempted_at, servers`,
+		keyID,
+		publicKey,
+		time.Now().Add(2*time.Hour),
+		serversJSON,
+	).Scan(
+		&key.ID,
+		&key.KeyID,
+		&key.PublicKey,
+		&key.CreatedAt,
+		&key.ExpiresAt,
+		&key.Status,
+		&key.CleanupAttemptedAt,
+		&serversBytes,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp SSH key: %w", err)
+	}
+
+	if err := json.Unmarshal(serversBytes, &key.Servers); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal servers: %w", err)
+	}
+
+	return &key, nil
+}
+
+func (p *PostgresDB) GetActiveKeyByID(ctx context.Context, keyID string) (*TempSSHKey, error) {
+	var key TempSSHKey
+	var serversBytes []byte
+
+	err := p.db.QueryRowContext(ctx, `
+        SELECT 
+            id, 
+            key_id, 
+            public_key, 
+            created_at, 
+            expires_at, 
+            status, 
+            cleanup_attempted_at, 
+            servers
+        FROM temp_ssh_keys
+        WHERE key_id = $1 
+        AND status = 'active'
+        AND expires_at > NOW()`,
+		keyID,
+	).Scan(
+		&key.ID,
+		&key.KeyID,
+		&key.PublicKey,
+		&key.CreatedAt,
+		&key.ExpiresAt,
+		&key.Status,
+		&key.CleanupAttemptedAt,
+		&serversBytes,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temp SSH key: %w", err)
+	}
+
+	if err := json.Unmarshal(serversBytes, &key.Servers); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal servers: %w", err)
+	}
+
+	return &key, nil
+}
+
+func (p *PostgresDB) MarkKeyAsExpired(ctx context.Context, keyID string) error {
+	_, err := p.db.ExecContext(ctx, `
+        UPDATE temp_ssh_keys 
+        SET status = 'expired' 
+        WHERE key_id = $1 
+        AND status = 'active'`,
+		keyID,
+	)
+	return err
+}
+
+func (p *PostgresDB) MarkKeyAsCleaned(ctx context.Context, keyID string) error {
+	_, err := p.db.ExecContext(ctx, `
+        UPDATE temp_ssh_keys 
+        SET 
+            status = 'cleaned',
+            cleanup_attempted_at = NOW()
+        WHERE key_id = $1`,
+		keyID,
+	)
+	return err
+}
+
+func (p *PostgresDB) GetExpiredUncleaned(ctx context.Context) ([]TempSSHKey, error) {
+	rows, err := p.db.QueryContext(ctx, `
+        SELECT 
+            id, 
+            key_id, 
+            public_key, 
+            created_at, 
+            expires_at, 
+            status, 
+            cleanup_attempted_at, 
+            servers::text  -- Convert JSONB to text for scanning
+        FROM temp_ssh_keys
+        WHERE (status = 'active' AND expires_at <= NOW())
+        OR (status = 'expired' AND cleanup_attempted_at IS NULL)`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query expired keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []TempSSHKey
+	for rows.Next() {
+		var key TempSSHKey
+		var serversJSON string
+
+		err := rows.Scan(
+			&key.ID,
+			&key.KeyID,
+			&key.PublicKey,
+			&key.CreatedAt,
+			&key.ExpiresAt,
+			&key.Status,
+			&key.CleanupAttemptedAt,
+			&serversJSON,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan key: %w", err)
+		}
+
+		if err := json.Unmarshal([]byte(serversJSON), &key.Servers); err != nil {
+			return nil, fmt.Errorf("failed to parse servers JSON: %w", err)
+		}
+
+		keys = append(keys, key)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	fmt.Printf("Total keys found: %d\n", len(keys))
+	return keys, nil
 }

@@ -8,10 +8,11 @@ type Config struct {
 type Server struct {
 	Host       string `json:"host"`
 	Username   string `json:"username"`
-	KeyPath    string `json:"key_path"`
+	KeyPath    string `json:"key_path,omitempty"`
 	DataCenter string `json:"datacenter"`
 	PublicIP   string `json:"public_ip"`
 	PrivateIP  string `json:"private_ip"`
+	AuthMethod string `json:"auth_method,omitempty"`
 }
 
 type ClusterConfig struct {

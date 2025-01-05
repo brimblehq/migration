@@ -1,12 +1,12 @@
 {
     "servers": [
       {
-        "host": "test",
+        "host": "test-2",
         "username": "root", 
         "key_path": "~/.ssh/id_rsa",
         "datacenter": "dc1",
-        "public_ip": "188.166.158.90",
-        "private_ip": "10.106.0.3"
+        "public_ip": "178.128.161.67",
+        "private_ip": "10.106.0.4"
       }
     ],
     "cluster_config": {

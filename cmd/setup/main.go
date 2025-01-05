@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/license"
@@ -23,6 +24,7 @@ func main() {
 	licenseKey := flag.String("license-key", "", "License key for runner")
 	instances := flag.String("instances", "6", "Number of instances for your brimble builder")
 	configPath := flag.String("config", "./config.json", "Path to config file")
+	useTemp := flag.Bool("temp-ssh", false, "Use temporary SSH keys for setup")
 
 	flag.Usage = func() {
 		ui.PrintBanner(false)
@@ -83,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	decryptedValue, err := license.Decrypt(dbUrl, apiKeySecret.SecretValue)
+	decryptedDatabaseValue, err := license.Decrypt(dbUrl, apiKeySecret.SecretValue)
 
 	if err != nil {
 		log.Fatalf("Failed to get database URL: %v", err)
@@ -93,8 +95,14 @@ func main() {
 		log.Fatal("Unable to setup this installation: missing database connection URL")
 	}
 
+	decryptedTailScaleValue, err := license.Decrypt(tailScaleToken, apiKeySecret.SecretValue)
+
+	if err != nil {
+		log.Fatalf("Failed to get tailscale token: %v", err)
+	}
+
 	database, err := db.NewPostgresDB(db.Config{
-		URI: decryptedValue,
+		URI: decryptedDatabaseValue,
 	})
 
 	if err != nil {
@@ -102,6 +110,47 @@ func main() {
 	}
 
 	defer database.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var sshManager *ssh.TempSSHManager
+	if *useTemp {
+		cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+
+		defer cleanupCancel()
+
+		ssh.CleanupExpiredKeys(cleanupCtx, database, &config)
+
+		servers := make([]string, len(config.Servers))
+		for i, server := range config.Servers {
+			servers[i] = server.Host
+		}
+
+		var err error
+
+		sshManager, err = ssh.NewTempSSHManager(database, servers)
+
+		if err != nil {
+			log.Fatalf("Failed to create SSH manager: %v", err)
+		}
+
+		if err := sshManager.GenerateKeys(ctx); err != nil {
+			log.Fatalf("Failed to generate SSH keys: %v", err)
+		}
+
+		fmt.Println("\n🔐 Temporary SSH Setup Required")
+
+		fmt.Println(sshManager.GetPublicKeyWithInstructions())
+
+		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+
+		defer cancel()
+
+		err = ssh.WaitForSSHReadiness(checkCtx, config.Servers, sshManager)
+		if err != nil {
+			log.Fatalf("SSH setup failed: %v", err)
+		}
+	}
 
 	existingServers, err := database.GetAllServers()
 	if err != nil {
@@ -147,8 +196,6 @@ func main() {
 
 	clusterRoles.CalculateRoles(config.Servers)
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	defer cancel()
 
 	errorChan := make(chan error)
@@ -167,7 +214,23 @@ func main() {
 			default:
 				spinner := ui.NewStepSpinner(server.Host)
 
-				client, err := ssh.NewSSHClient(server)
+				var (
+					client *ssh.SSHClient
+					err    error
+				)
+
+				if *useTemp {
+					sshConfig, configErr := sshManager.GetSSHConfig(server.Host)
+					if configErr != nil {
+						spinner.Start("Connecting to server")
+						spinner.Stop(false)
+						log.Printf("Error getting SSH config for %s: %v", server.Host, configErr)
+						return
+					}
+					client, err = ssh.NewSSHClient(server, sshConfig)
+				} else {
+					client, err = ssh.NewSSHClient(server, nil)
+				}
 
 				if err != nil {
 					spinner.Start("Connecting to server")
@@ -175,6 +238,15 @@ func main() {
 					log.Printf("Error connecting to %s: %v", server.Host, err)
 					return
 				}
+
+				if *useTemp {
+					defer func() {
+						if err := sshManager.Cleanup(ctx, client); err != nil {
+							log.Printf("Warning: Failed to cleanup SSH key on %s: %v", server.Host, err)
+						}
+					}()
+				}
+
 				defer client.Close()
 
 				spinner.Start("Getting machine info")
@@ -231,7 +303,7 @@ func main() {
 					currentStep = types.StepInitialized
 				}
 
-				im := manager.NewInstallationManager(client, server, roles, &config, tailScaleToken, database)
+				im := manager.NewInstallationManager(client, server, roles, &config, decryptedTailScaleValue, database)
 
 				steps := []struct {
 					name    string
