@@ -37,12 +37,12 @@ func (p *PostgresDB) Close() error {
 	return p.db.Close()
 }
 
-func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string) error {
+func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string, identifier string, step types.ServerStep) error {
 	query := `
-        INSERT INTO servers (machine_id, public_ip, private_ip, role, status, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $6)
+        INSERT INTO servers (machine_id, public_ip, private_ip, role, status, identifier, step, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
         ON CONFLICT (machine_id) DO UPDATE
-        SET status = $5, updated_at = $6
+        SET status = $5, updated_at = $8
     `
 
 	_, err := p.db.Exec(query,
@@ -51,6 +51,8 @@ func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string)
 		privateIP,
 		role,
 		"active",
+		identifier,
+		step,
 		time.Now(),
 	)
 
@@ -119,4 +121,21 @@ func (p *PostgresDB) UpdateServerRole(machineID, role string) error {
 
 	_, err := p.db.Exec(query, role, time.Now(), machineID)
 	return err
+}
+
+func (p *PostgresDB) UpdateServerStep(machineID string, step types.ServerStep) error {
+	query := `
+        UPDATE servers 
+        SET current_step = $1, updated_at = $2
+        WHERE machine_id = $3
+    `
+	_, err := p.db.Exec(query, step, time.Now(), machineID)
+	return err
+}
+
+func (p *PostgresDB) GetServerStep(machineID string) (types.ServerStep, error) {
+	var step types.ServerStep
+	query := `SELECT current_step FROM servers WHERE machine_id = $1`
+	err := p.db.QueryRow(query, machineID).Scan(&step)
+	return step, err
 }

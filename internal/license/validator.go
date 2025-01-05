@@ -1,28 +1,124 @@
 package license
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
+type DeviceInfo struct {
+	DeviceId string `json:"deviceId"`
+	Hostname string `json:"hostname"`
+}
+
+type DevicePayload struct {
+	DeviceInfo DeviceInfo `json:"deviceInfo"`
+}
+
+type SubscriptionResponse struct {
+	ID             string    `json:"_id"`
+	AdminID        string    `json:"admin_id"`
+	BillableID     string    `json:"billable_id"`
+	ProjectID      *string   `json:"project_id"`
+	PlanType       string    `json:"plan_type"`
+	Status         string    `json:"status"`
+	DebitDate      time.Time `json:"debit_date"`
+	StartDate      time.Time `json:"start_date"`
+	ExpiryDate     time.Time `json:"expiry_date"`
+	TriggerCreated bool      `json:"trigger_created"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	Version        int       `json:"__v"`
+	JobIdentifier  string    `json:"job_identifier"`
+}
+
 type LicenseResponse struct {
-	Valid           bool                   `json:"valid"`
-	Key             string                 `json:"key"`
-	ExpireIn        *string                `json:"expireIn"`
-	TailScaleToken  string                 `json:"tailScaleToken"`
-	DbConnectionUrl string                 `json:"connectionString"`
-	Subscription    map[string]interface{} `json:"subscription,omitempty"`
+	Valid           bool                 `json:"valid"`
+	Key             string               `json:"key"`
+	ExpireIn        *string              `json:"expireIn"`
+	TailScaleToken  string               `json:"tailScaleToken"`
+	DbConnectionUrl string               `json:"connectionString"`
+	Subscription    SubscriptionResponse `json:"subscription,omitempty"`
+}
+
+type SetupResponse struct {
+	Valid       bool   `json:"valid"`
+	DatabaseURI string `json:"dbUri"`
 }
 
 type APIResponse struct {
 	Data LicenseResponse `json:"data"`
 }
 
-func ValidateLicenseKey(licenseKey string) (*LicenseResponse, error) {
-	url := fmt.Sprintf("https://d7e1-2605-6440-4002-1000-00-7656.ngrok-free.app/v1/license?key=%s", licenseKey)
+type SetupAPIResponse struct {
+	Data SetupResponse `json:"data"`
+}
 
-	resp, err := http.Get(url)
+func GetDatabaseUrl(licenseKey string) (string, error) {
+	url := "https://core.brimble.io/v1/license/setup"
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Brimble-Key", licenseKey)
+	req.Header.Set("X-Setup-Type", "installation")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var apiResp SetupAPIResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// if !apiResp.Data.Valid {
+	// 	return "", fmt.Errorf("invalid license key")
+	// }
+
+	return apiResp.Data.DatabaseURI, nil
+}
+
+func ValidateLicenseKey(licenseKey string, deviceId string, hostname string) (*LicenseResponse, error) {
+	url := "https://core.brimble.io/v1/license"
+
+	payload := DevicePayload{
+		DeviceInfo: DeviceInfo{
+			DeviceId: deviceId,
+			Hostname: hostname,
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return &LicenseResponse{
+			Valid:    false,
+			Key:      licenseKey,
+			ExpireIn: nil,
+		}, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return &LicenseResponse{
+			Valid:    false,
+			Key:      licenseKey,
+			ExpireIn: nil,
+		}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Brimble-Key", licenseKey)
+	req.Header.Set("X-Setup-Type", "installation")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return &LicenseResponse{
 			Valid:    false,
@@ -38,7 +134,7 @@ func ValidateLicenseKey(licenseKey string) (*LicenseResponse, error) {
 			Valid:    false,
 			Key:      licenseKey,
 			ExpireIn: nil,
-		}, nil
+		}, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	return &apiResp.Data, nil

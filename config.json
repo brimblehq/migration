@@ -12,7 +12,7 @@
     "cluster_config": {
       "consul": {
         "server_address": "209.97.138.138:8500",
-        "token": "14f1f8a7-08cb-20d5-7ee3-621624225a68",
+        "token": "14f1f8a7-08cb-20d5-7ee3-XXXXXX",
         "datacenter": "dc1",
         "consul_image": "hashicorp/consul:1.16"
       },
