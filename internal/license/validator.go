@@ -38,14 +38,14 @@ type LicenseResponse struct {
 	Valid           bool                 `json:"valid"`
 	Key             string               `json:"key"`
 	ExpireIn        *string              `json:"expireIn"`
-	TailScaleToken  string               `json:"tailScaleToken"`
 	DbConnectionUrl string               `json:"connectionString"`
 	Subscription    SubscriptionResponse `json:"subscription,omitempty"`
 }
 
 type SetupResponse struct {
-	Valid       bool   `json:"valid"`
-	DatabaseURI string `json:"dbUri"`
+	Valid          bool   `json:"valid"`
+	DatabaseURI    string `json:"dbUri"`
+	TailScaleToken string `json:"tailScaleToken"`
 }
 
 type APIResponse struct {
@@ -56,12 +56,12 @@ type SetupAPIResponse struct {
 	Data SetupResponse `json:"data"`
 }
 
-func GetDatabaseUrl(licenseKey string) (string, error) {
+func GetDatabaseUrl(licenseKey string) (string, string, error) {
 	url := "https://core.brimble.io/v1/license/setup"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -70,20 +70,20 @@ func GetDatabaseUrl(licenseKey string) (string, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	var apiResp SetupAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		return "", "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// if !apiResp.Data.Valid {
 	// 	return "", fmt.Errorf("invalid license key")
 	// }
 
-	return apiResp.Data.DatabaseURI, nil
+	return apiResp.Data.DatabaseURI, apiResp.Data.DatabaseURI, nil
 }
 
 func ValidateLicenseKey(licenseKey string, deviceId string, hostname string) (*LicenseResponse, error) {

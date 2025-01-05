@@ -53,7 +53,7 @@ func main() {
 		log.Fatalf("Error parsing config: %v", err)
 	}
 
-	dbUrl, err := license.GetDatabaseUrl(*licenseKey)
+	dbUrl, tailScaleToken, err := license.GetDatabaseUrl(*licenseKey)
 
 	if err != nil {
 		log.Fatalf("Failed to get database URL: %v", err)
@@ -231,7 +231,7 @@ func main() {
 					currentStep = types.StepInitialized
 				}
 
-				im := manager.NewInstallationManager(client, server, roles, &config, licenseResp.TailScaleToken, database)
+				im := manager.NewInstallationManager(client, server, roles, &config, tailScaleToken, database)
 
 				steps := []struct {
 					name    string
