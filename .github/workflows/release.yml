@@ -26,17 +26,30 @@ jobs:
         with:
           go-version: stable
 
-      - name: Create Tag
-        id: create_tag
+      - name: Install Semantic Versioning CLI
         run: |
-          TAG_NAME="v$(date +'%Y.%m.%d.%H%M%S')"
-          echo "Generated tag: $TAG_NAME"
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          npm install -g semver
 
+      - name: Generate Semantic Version Tag
+        id: generate_tag
+        run: |
+          # Fetch the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Generate the next version (e.g., increment patch version)
+          NEXT_TAG=$(semver bump patch "$LATEST_TAG")
+          echo "Generated tag: $NEXT_TAG"
+
+          # Expose the tag as an environment variable
+          echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
+
+      - name: Create Tag
+        run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
-          git push origin "$TAG_NAME"
+          git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
+          git push origin "$NEXT_TAG"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
