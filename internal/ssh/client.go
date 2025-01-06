@@ -22,6 +22,20 @@ type SSHClient struct {
 	spinner *ui.StepSpinner
 }
 
+type SingleServerTempKeyError struct {
+	Server types.Server
+}
+
+type ValidationError struct {
+	Server string
+	Reason string
+}
+
+const (
+	AuthMethodKeyPath = "key_path"
+	AuthMethodTemp    = "temp_key"
+)
+
 func NewSSHClient(server types.Server, config *ssh.ClientConfig) (*SSHClient, error) {
 	var sshConfig *ssh.ClientConfig
 
@@ -52,6 +66,7 @@ func NewSSHClient(server types.Server, config *ssh.ClientConfig) (*SSHClient, er
 		output: output,
 	}, nil
 }
+
 func createConfigFromKeyPath(server types.Server) (*ssh.ClientConfig, error) {
 	keyPath := server.KeyPath
 
@@ -165,6 +180,101 @@ func (s *SSHClient) ExecuteCommandWithOutput(command string) (string, error) {
 	}
 
 	return outputBuffer.String(), nil
+}
+
+func ValidateServerAuth(servers []types.Server, useTemp bool) error {
+	seen := make(map[string]bool)
+	seenPublicIPs := make(map[string]string)
+	seenPrivateIPs := make(map[string]string)
+	var errors []ValidationError
+
+	if len(servers) == 1 && servers[0].AuthMethod == AuthMethodTemp {
+		return &SingleServerTempKeyError{
+			Server: servers[0],
+		}
+	}
+
+	for _, server := range servers {
+		identifier := fmt.Sprintf("%s:%s:%s", server.Host, server.PublicIP, server.PrivateIP)
+
+		if seen[identifier] {
+			errors = append(errors, ValidationError{
+				Server: server.Host,
+				Reason: fmt.Sprintf("duplicate server configuration (public IP: %s, private IP: %s)",
+					server.PublicIP, server.PrivateIP),
+			})
+		}
+		seen[identifier] = true
+
+		if existingHost, exists := seenPublicIPs[server.PublicIP]; exists {
+			errors = append(errors, ValidationError{
+				Server: server.Host,
+				Reason: fmt.Sprintf("public IP %s already used by server %s",
+					server.PublicIP, existingHost),
+			})
+		}
+		seenPublicIPs[server.PublicIP] = server.Host
+
+		if existingHost, exists := seenPrivateIPs[server.PrivateIP]; exists {
+			errors = append(errors, ValidationError{
+				Server: server.Host,
+				Reason: fmt.Sprintf("private IP %s already used by server %s",
+					server.PrivateIP, existingHost),
+			})
+		}
+		seenPrivateIPs[server.PrivateIP] = server.Host
+
+		if useTemp && server.AuthMethod == AuthMethodKeyPath {
+			errors = append(errors, ValidationError{
+				Server: server.Host,
+				Reason: "configured to use key_path but --temp-ssh flag is provided",
+			})
+		}
+		if !useTemp && server.AuthMethod == AuthMethodTemp {
+			errors = append(errors, ValidationError{
+				Server: server.Host,
+				Reason: "configured to use temp_key but --temp-ssh flag is not provided",
+			})
+		}
+	}
+
+	if len(errors) > 0 {
+		var errorMsg strings.Builder
+		errorMsg.WriteString("Configuration validation failed:\n")
+		for _, err := range errors {
+			errorMsg.WriteString(fmt.Sprintf("- Server '%s': %s\n", err.Server, err.Reason))
+		}
+		return fmt.Errorf(errorMsg.String())
+	}
+
+	return nil
+}
+
+func (e *SingleServerTempKeyError) Error() string {
+	return "single server with temp_key configuration detected"
+}
+
+func HandleServerAuth(server types.Server, tempManager *TempSSHManager, useTemp bool) (*SSHClient, error) {
+
+	if useTemp {
+		if tempManager == nil {
+			return nil, fmt.Errorf("temp SSH requested but manager not initialized for server %s", server.Host)
+		}
+		sshConfig, err := tempManager.GetSSHConfig(server.Host)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get temp SSH config for %s: %w", server.Host, err)
+		}
+		return NewSSHClient(server, sshConfig)
+	}
+
+	switch server.AuthMethod {
+	case AuthMethodTemp:
+		return nil, fmt.Errorf("machine %s configured to use temp_key but --temp-ssh flag not provided", server.Host)
+	case AuthMethodKeyPath, "":
+		return NewSSHClient(server, nil)
+	default:
+		return nil, fmt.Errorf("unsupported auth_method '%s' for server %s", server.AuthMethod, server.Host)
+	}
 }
 
 func (s *SSHClient) Close() error {

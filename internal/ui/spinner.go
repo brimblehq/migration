@@ -31,6 +31,7 @@ func NewStepSpinner(host string, output *TerminalOutput) *StepSpinner {
 		output:  output,
 	}
 }
+
 func (s *StepSpinner) Start(step string) {
 	s.currentStep = step
 	if s.output != nil {

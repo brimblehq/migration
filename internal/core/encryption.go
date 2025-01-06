@@ -1,4 +1,4 @@
-package license
+package core
 
 import (
 	"crypto/aes"

@@ -8,30 +8,33 @@ import (
 	"time"
 
 	"github.com/brimblehq/migration/assets"
+	"github.com/brimblehq/migration/internal/core"
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 )
 
 type InstallationManager struct {
-	sshClient      *ssh.SSHClient
-	server         types.Server
-	roles          []types.ClusterRole
-	config         *types.Config
-	files          embed.FS
-	tailScaleToken string
-	DB             *db.PostgresDB
+	sshClient       *ssh.SSHClient
+	server          types.Server
+	roles           []types.ClusterRole
+	config          *types.Config
+	files           embed.FS
+	tailScaleToken  string
+	DB              *db.PostgresDB
+	LicenseResponse *core.LicenseResponse
 }
 
-func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config, tailScaleToken string, db *db.PostgresDB) *InstallationManager {
+func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config, tailScaleToken string, db *db.PostgresDB, lisResp *core.LicenseResponse) *InstallationManager {
 	return &InstallationManager{
-		sshClient:      client,
-		server:         server,
-		roles:          roles,
-		config:         config,
-		files:          assets.MonitoringFiles,
-		tailScaleToken: tailScaleToken,
-		DB:             db,
+		sshClient:       client,
+		server:          server,
+		roles:           roles,
+		config:          config,
+		files:           assets.MonitoringFiles,
+		tailScaleToken:  tailScaleToken,
+		DB:              db,
+		LicenseResponse: lisResp,
 	}
 }
 
@@ -42,7 +45,7 @@ func (im *InstallationManager) InstallBasePackages() error {
 		"sudo apt install -y curl unzip wget ufw coreutils gpg debian-keyring debian-archive-keyring apt-transport-https",
 		"sudo apt update -y",
 
-		fmt.Sprintf("curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up --auth-key=%s", im.tailScaleToken),
+		fmt.Sprintf("sudo tailscale up --advertise-tags='tag:client-%s'", im.LicenseResponse.Tag),
 
 		"curl -fsSL https://get.docker.com -o get-docker.sh",
 		"sudo sh get-docker.sh",

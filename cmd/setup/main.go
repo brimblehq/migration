@@ -9,10 +9,9 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/brimblehq/migration/internal/core"
 	"github.com/brimblehq/migration/internal/db"
-	"github.com/brimblehq/migration/internal/license"
 	"github.com/brimblehq/migration/internal/manager"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
@@ -21,6 +20,10 @@ import (
 )
 
 func main() {
+	var wg sync.WaitGroup
+
+	var setupFailed bool
+
 	licenseKey := flag.String("license-key", "", "License key for runner")
 	instances := flag.String("instances", "6", "Number of instances for your brimble builder")
 	configPath := flag.String("config", "./config.json", "Path to config file")
@@ -55,7 +58,7 @@ func main() {
 		log.Fatalf("Error parsing config: %v", err)
 	}
 
-	dbUrl, tailScaleToken, err := license.GetDatabaseUrl(*licenseKey)
+	dbUrl, tailScaleToken, maxDevices, err := core.GetDatabaseUrl(*licenseKey)
 
 	if err != nil {
 		log.Fatalf("Failed to get database URL: %v", err)
@@ -85,7 +88,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	decryptedDatabaseValue, err := license.Decrypt(dbUrl, apiKeySecret.SecretValue)
+	decryptedDatabaseValue, err := core.Decrypt(dbUrl, apiKeySecret.SecretValue)
 
 	if err != nil {
 		log.Fatalf("Failed to get database URL: %v", err)
@@ -95,7 +98,7 @@ func main() {
 		log.Fatal("Unable to setup this installation: missing database connection URL")
 	}
 
-	decryptedTailScaleValue, err := license.Decrypt(tailScaleToken, apiKeySecret.SecretValue)
+	decryptedTailScaleValue, err := core.Decrypt(tailScaleToken, apiKeySecret.SecretValue)
 
 	if err != nil {
 		log.Fatalf("Failed to get tailscale token: %v", err)
@@ -113,43 +116,12 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var sshManager *ssh.TempSSHManager
-	if *useTemp {
-		cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	setupManager := ssh.NewSSHSetupManager(database, &config)
 
-		defer cleanupCancel()
+	sshManager, err := setupManager.ValidateAndInitializeSSH(ctx, *useTemp, maxDevices)
 
-		ssh.CleanupExpiredKeys(cleanupCtx, database, &config)
-
-		servers := make([]string, len(config.Servers))
-		for i, server := range config.Servers {
-			servers[i] = server.Host
-		}
-
-		var err error
-
-		sshManager, err = ssh.NewTempSSHManager(database, servers)
-
-		if err != nil {
-			log.Fatalf("Failed to create SSH manager: %v", err)
-		}
-
-		if err := sshManager.GenerateKeys(ctx); err != nil {
-			log.Fatalf("Failed to generate SSH keys: %v", err)
-		}
-
-		fmt.Println("\n🔐 Temporary SSH Setup Required")
-
-		fmt.Println(sshManager.GetPublicKeyWithInstructions())
-
-		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-
-		defer cancel()
-
-		err = ssh.WaitForSSHReadiness(checkCtx, config.Servers, sshManager)
-		if err != nil {
-			log.Fatalf("SSH setup failed: %v", err)
-		}
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
 	existingServers, err := database.GetAllServers()
@@ -158,6 +130,7 @@ func main() {
 	}
 
 	var allServers []types.Server
+
 	existingIPs := make(map[string]struct {
 		step      types.ServerStep
 		publicIP  string
@@ -200,8 +173,6 @@ func main() {
 
 	errorChan := make(chan error)
 
-	var wg sync.WaitGroup
-
 	for _, server := range config.Servers {
 		wg.Add(1)
 
@@ -213,6 +184,7 @@ func main() {
 				return
 			default:
 				terminalOutput := ui.NewTerminalOutput(server.Host)
+
 				spinner := ui.NewStepSpinner(server.Host, terminalOutput)
 
 				var (
@@ -220,23 +192,13 @@ func main() {
 					err    error
 				)
 
-				if *useTemp {
-					sshConfig, configErr := sshManager.GetSSHConfig(server.Host)
-					if configErr != nil {
-						spinner.Start("Connecting to server")
-						spinner.Stop(false)
-						log.Printf("Error getting SSH config for %s: %v", server.Host, configErr)
-						return
-					}
-					client, err = ssh.NewSSHClient(server, sshConfig)
-				} else {
-					client, err = ssh.NewSSHClient(server, nil)
-				}
+				client, err = ssh.HandleServerAuth(server, sshManager, *useTemp)
 
 				if err != nil {
+					setupFailed = true
 					spinner.Start("Connecting to server")
 					spinner.Stop(false)
-					log.Printf("Error connecting to %s: %v", server.Host, err)
+					log.Printf("Error connecting to (%s): %v", server.Host, err)
 					return
 				}
 
@@ -251,26 +213,33 @@ func main() {
 				defer client.Close()
 
 				spinner.Start("Getting machine info")
+
 				machineID, err := client.ExecuteCommandWithOutput("cat /etc/machine-id")
 				if err != nil {
+					setupFailed = true
 					spinner.Stop(false)
-					log.Printf("Error getting machine-id from %s: %v", server.Host, err)
+					log.Printf("Error getting machine-id from (%s): %v", server.Host, err)
 					return
 				}
 
 				hostname, err := client.ExecuteCommandWithOutput("hostname")
+
 				if err != nil {
+					setupFailed = true
 					spinner.Stop(false)
-					log.Printf("Error getting hostname from %s: %v", server.Host, err)
+					log.Printf("Error getting hostname from (%s): %v", server.Host, err)
 					return
 				}
+
 				spinner.Stop(true)
 
 				spinner.Start("Validating license")
-				licenseResp, err := license.ValidateLicenseKey(*licenseKey, strings.TrimSpace(machineID), strings.TrimSpace(hostname))
+
+				licenseResp, err := core.ValidateLicenseKey(*licenseKey, strings.TrimSpace(machineID), strings.TrimSpace(hostname))
 				if err != nil || !licenseResp.Valid {
+					setupFailed = true
 					spinner.Stop(false)
-					log.Printf("Invalid license for server %s, reach out to hello@brimble.app for support", server.Host)
+					log.Printf("Invalid license for server (%s), reach out to hello@brimble.app for support", server.Host)
 					os.Exit(1)
 					return
 				}
@@ -279,8 +248,6 @@ func main() {
 				roles := clusterRoles.RoleMapping[server.Host]
 
 				currentStep, err := database.GetServerStep(machineID, licenseResp.Subscription.ID)
-
-				// log.Printf("Debug: Current step for server %s: %s", server.Host, currentStep)
 
 				if err != nil {
 					role := "client"
@@ -297,6 +264,7 @@ func main() {
 						types.StepInitialized,
 					)
 					if err != nil {
+						setupFailed = true
 						spinner.Stop(false)
 						log.Printf("Error registering server %s: %v", server.Host, err)
 						return
@@ -304,7 +272,7 @@ func main() {
 					currentStep = types.StepInitialized
 				}
 
-				im := manager.NewInstallationManager(client, server, roles, &config, decryptedTailScaleValue, database)
+				im := manager.NewInstallationManager(client, server, roles, &config, decryptedTailScaleValue, database, licenseResp)
 
 				steps := []struct {
 					name    string
@@ -374,16 +342,18 @@ func main() {
 						if currentStepOrder < currentLoopStepOrder && currentStepOrder >= requiredStepOrder {
 							spinner.Start(step.name)
 							if err := step.fn(); err != nil {
+								setupFailed = true
 								spinner.Stop(false)
-								errorChan <- fmt.Errorf("error during %s on %s: %v", step.name, server.Host, err)
+								errorChan <- fmt.Errorf("error during (%s) on %s: %v", step.name, server.Host, err)
 								cancel()
 								return
 							}
 							currentStep = step.step
 							currentStepOrder = stepOrder[currentStep]
 							if err := database.UpdateServerStep(machineID, step.step); err != nil {
+								setupFailed = true
 								spinner.Stop(false)
-								log.Printf("Error updating step for server %s: %v", server.Host, err)
+								log.Printf("Error updating step for server (%s): %v", server.Host, err)
 								return
 							}
 							spinner.Stop(true)
@@ -395,13 +365,11 @@ func main() {
 				}
 
 				if err := database.UpdateServerStep(machineID, types.StepCompleted); err != nil {
-					log.Printf("Error marking server %s as completed: %v", server.Host, err)
+					log.Printf("Error marking server (%s) as completed: %v", server.Host, err)
 				}
 			}
 		}(server)
 	}
-
-	var setupFailed bool
 
 	go func() {
 		wg.Wait()

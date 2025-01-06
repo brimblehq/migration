@@ -6,7 +6,8 @@
         "key_path": "~/.ssh/id_rsa",
         "datacenter": "dc1",
         "public_ip": "178.128.161.67",
-        "private_ip": "10.106.0.4"
+        "private_ip": "10.106.0.4",
+        "auth_method": "key_path"
       }
     ],
     "cluster_config": {
@@ -29,9 +30,12 @@
         "nodejs": "20.x", 
         "nomad": "1.6.3"
       },
-      "docker": {
+      "registry": {
         "username": "",
-        "password": ""
+        "password": "",
+        "type": "",
+        "region": "",
+        "projectId": ""
       }
     }
    }

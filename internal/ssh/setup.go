@@ -19,6 +19,7 @@ import (
 
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/types"
+	"github.com/brimblehq/migration/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -109,7 +110,8 @@ func (m *TempSSHManager) GetPublicKeyWithInstructions() string {
 	pubKey := string(m.publicKey)
 	return fmt.Sprintf(`
 🔑 Generated temporary SSH key: %s
-📋 Please add this public key to your server:
+
+📋 Please add this public key to your machine:
 
 %s
 
@@ -267,7 +269,7 @@ func CleanupExpiredKeys(ctx context.Context, db *db.PostgresDB, config *types.Co
 				log.Printf("Failed to remove key from %s: %v", serverHost, err)
 			}
 
-			log.Printf("STALE KEYS REMOVED")
+			// log.Printf("STALE KEYS REMOVED")
 
 			client.Close()
 		}
@@ -281,8 +283,9 @@ func CleanupExpiredKeys(ctx context.Context, db *db.PostgresDB, config *types.Co
 }
 
 func WaitForSSHReadiness(ctx context.Context, servers []types.Server, sshManager *TempSSHManager) error {
-	// spinner := ui.NewStepSpinner("SSH Setup")
-	// spinner.Start("Waiting for SSH access...")
+	terminalOutput := ui.NewTerminalOutput("SSH Setup")
+	spinner := ui.NewStepSpinner("SSH Setup", terminalOutput)
+	spinner.Start("Waiting for SSH access...")
 
 	statusChan := make(chan ServerStatus)
 	doneChan := make(chan struct{})
@@ -310,14 +313,14 @@ func WaitForSSHReadiness(ctx context.Context, servers []types.Server, sshManager
 			readyServers[status.Host] = true
 			remaining := serverCount - len(readyServers)
 			if remaining > 0 {
-				// spinner.Start(fmt.Sprintf("SSH access established for %s (%d servers remaining)",
-				// 	status.Host, remaining))
+				spinner.Start(fmt.Sprintf("SSH access established for %s (%d servers remaining)",
+					status.Host, remaining))
 			}
 		}
 
 		if len(readyServers) == serverCount {
 			close(doneChan)
-			// spinner.Stop(true)
+			spinner.Stop(true)
 			fmt.Println("✅ SSH setup complete! All servers are accessible.")
 			return nil
 		}

@@ -372,6 +372,6 @@ func (p *PostgresDB) GetExpiredUncleaned(ctx context.Context) ([]TempSSHKey, err
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	fmt.Printf("Total keys found: %d\n", len(keys))
+	// fmt.Printf("Total keys found: %d\n", len(keys))
 	return keys, nil
 }
