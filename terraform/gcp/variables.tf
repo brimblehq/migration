@@ -17,7 +17,7 @@ variable "zone" {
 }
 
 variable "machine_type" {
-  description = "Machine type for Nomad instances"
+  description = "Machine type for GCP instances"
   type        = string
   default     = "e2-standard-2"
 }
@@ -29,7 +29,7 @@ variable "image" {
 }
 
 variable "instance_count" {
-  description = "Number of Nomad instances"
+  description = "Number of GCP instances"
   type        = number
   default     = 3
 }
