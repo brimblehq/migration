@@ -68,7 +68,11 @@ resource "google_compute_instance_template" "nomad_template" {
 resource "google_compute_instance_group_manager" "nomad_instances" {
   name               = "nomad-instance-group"
   base_instance_name = "nomad-instance"
-  instance_template  = google_compute_instance_template.nomad_template.id
+
+  version {
+    instance_template = google_compute_instance_template.nomad_template.id
+  }
+  
   target_size        = var.instance_count
 
   named_port {
