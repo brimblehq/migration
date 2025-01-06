@@ -1,5 +1,5 @@
 variable "instance_count" {
-  description = "Number of Nomad instances to launch"
+  description = "Number of AWS instances to launch"
   type        = number
   default     = 2
 }
