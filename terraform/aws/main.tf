@@ -108,6 +108,20 @@ resource "aws_instance" "nomad_instance" {
   vpc_security_group_ids      = [aws_security_group.nomad_sg.id]
   associate_public_ip_address = true
 
+  # Root Volume (Default Storage)
+  root_block_device {
+    volume_size = 50  # Size in GB
+    volume_type = "gp3"
+  }
+
+  # Additional EBS Volume
+  ebs_block_device {
+    device_name           = "/dev/xvdb"
+    volume_size           = 100  # Size in GB
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
   tags = {
     Name = "nomad-instance-${count.index + 1}"
   }
