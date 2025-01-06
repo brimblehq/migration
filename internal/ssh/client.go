@@ -1,6 +1,8 @@
 package ssh
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -9,16 +11,21 @@ import (
 	"time"
 
 	"github.com/brimblehq/migration/internal/types"
+	"github.com/brimblehq/migration/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
 
 type SSHClient struct {
-	Client *ssh.Client
-	config *ssh.ClientConfig
+	Client  *ssh.Client
+	config  *ssh.ClientConfig
+	output  *ui.TerminalOutput
+	spinner *ui.StepSpinner
 }
 
 func NewSSHClient(server types.Server, config *ssh.ClientConfig) (*SSHClient, error) {
 	var sshConfig *ssh.ClientConfig
+
+	output := ui.NewTerminalOutput(server.Host)
 
 	if config != nil {
 		sshConfig = config
@@ -42,6 +49,7 @@ func NewSSHClient(server types.Server, config *ssh.ClientConfig) (*SSHClient, er
 	return &SSHClient{
 		Client: client,
 		config: sshConfig,
+		output: output,
 	}, nil
 }
 func createConfigFromKeyPath(server types.Server) (*ssh.ClientConfig, error) {
@@ -80,10 +88,44 @@ func (s *SSHClient) ExecuteCommand(command string) error {
 	}
 	defer session.Close()
 
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
+	if s.spinner != nil {
+		currentStep := strings.TrimPrefix(s.spinner.GetCurrentStep(), " ")
+		s.spinner.Start(currentStep)
+	}
 
-	return session.Run(command)
+	outPipe, err := session.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %v", err)
+	}
+
+	errPipe, err := session.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %v", err)
+	}
+
+	if err := session.Start(command); err != nil {
+		return fmt.Errorf("failed to start command: %v", err)
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(outPipe)
+		for scanner.Scan() {
+			if s.output != nil {
+				s.output.WriteLine("%s", scanner.Text())
+			}
+		}
+	}()
+
+	go func() {
+		scanner := bufio.NewScanner(errPipe)
+		for scanner.Scan() {
+			if s.output != nil {
+				s.output.WriteLine("ERROR: %s", scanner.Text())
+			}
+		}
+	}()
+
+	return session.Wait()
 }
 
 func (s *SSHClient) ExecuteCommandWithOutput(command string) (string, error) {
@@ -93,14 +135,39 @@ func (s *SSHClient) ExecuteCommandWithOutput(command string) (string, error) {
 	}
 	defer session.Close()
 
-	output, err := session.Output(command)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute command: %v", err)
+	if s.spinner != nil {
+		currentStep := strings.TrimPrefix(s.spinner.GetCurrentStep(), " ")
+		s.spinner.Start(currentStep)
 	}
 
-	return string(output), nil
+	outPipe, err := session.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %v", err)
+	}
+
+	var outputBuffer bytes.Buffer
+
+	if err := session.Start(command); err != nil {
+		return "", fmt.Errorf("failed to start command: %v", err)
+	}
+
+	scanner := bufio.NewScanner(outPipe)
+	for scanner.Scan() {
+		line := scanner.Text()
+		outputBuffer.WriteString(line + "\n")
+		if s.output != nil {
+			s.output.WriteLine("%s", line)
+		}
+	}
+
+	if err := session.Wait(); err != nil {
+		return "", fmt.Errorf("command execution failed: %v", err)
+	}
+
+	return outputBuffer.String(), nil
 }
 
 func (s *SSHClient) Close() error {
+	s.output.Clear()
 	return s.Client.Close()
 }

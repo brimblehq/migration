@@ -19,7 +19,6 @@ import (
 
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/types"
-	"github.com/brimblehq/migration/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -118,21 +117,6 @@ You can do this by running:
 echo "%s" >> ~/.ssh/authorized_keys
 `, m.keyID, pubKey, pubKey)
 }
-
-// func (m *TempSSHManager) GetSSHConfig() (*ssh.ClientConfig, error) {
-// 	signer, err := ssh.NewSignerFromKey(m.privateKey)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to create signer: %w", err)
-// 	}
-
-// 	return &ssh.ClientConfig{
-// 		Auth: []ssh.AuthMethod{
-// 			ssh.PublicKeys(signer),
-// 		},
-// 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // Note: In production, consider using ssh.FixedHostKey
-// 		Timeout:         30 * time.Second,
-// 	}, nil
-// }
 
 func (m *TempSSHManager) GetSSHConfig(host string) (*ssh.ClientConfig, error) {
 	signer, err := ssh.NewSignerFromKey(m.privateKey)
@@ -297,8 +281,8 @@ func CleanupExpiredKeys(ctx context.Context, db *db.PostgresDB, config *types.Co
 }
 
 func WaitForSSHReadiness(ctx context.Context, servers []types.Server, sshManager *TempSSHManager) error {
-	spinner := ui.NewStepSpinner("SSH Setup")
-	spinner.Start("Waiting for SSH access...")
+	// spinner := ui.NewStepSpinner("SSH Setup")
+	// spinner.Start("Waiting for SSH access...")
 
 	statusChan := make(chan ServerStatus)
 	doneChan := make(chan struct{})
@@ -326,14 +310,14 @@ func WaitForSSHReadiness(ctx context.Context, servers []types.Server, sshManager
 			readyServers[status.Host] = true
 			remaining := serverCount - len(readyServers)
 			if remaining > 0 {
-				spinner.Start(fmt.Sprintf("SSH access established for %s (%d servers remaining)",
-					status.Host, remaining))
+				// spinner.Start(fmt.Sprintf("SSH access established for %s (%d servers remaining)",
+				// 	status.Host, remaining))
 			}
 		}
 
 		if len(readyServers) == serverCount {
 			close(doneChan)
-			spinner.Stop(true)
+			// spinner.Stop(true)
 			fmt.Println("✅ SSH setup complete! All servers are accessible.")
 			return nil
 		}

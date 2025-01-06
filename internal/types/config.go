@@ -19,6 +19,7 @@ type ClusterConfig struct {
 	ConsulConfig     ConsulConfig     `json:"consul"`
 	MonitoringConfig MonitoringConfig `json:"monitoring"`
 	Versions         Versions         `json:"versions"`
+	Runner           Runner           `json:"runner"`
 }
 
 type ConsulConfig struct {
@@ -37,4 +38,14 @@ type Versions struct {
 	Docker string `json:"docker"`
 	NodeJS string `json:"nodejs"`
 	Nomad  string `json:"nomad"`
+}
+
+type Docker struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type Runner struct {
+	Port     int `json:"port"`
+	Instance int `json:"instance"`
 }

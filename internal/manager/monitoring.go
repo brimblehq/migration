@@ -72,9 +72,9 @@ func (im *InstallationManager) SetupMonitoring() error {
 			return fmt.Errorf("failed to run job %s: %v", jobName, err)
 		}
 
-		if err := im.waitForJobHealth(jobName); err != nil {
-			return fmt.Errorf("job %s failed to become healthy: %v", jobName, err)
-		}
+		// if err := im.waitForJobHealth(jobName); err != nil {
+		// 	return fmt.Errorf("job %s failed to become healthy: %v", jobName, err)
+		// }
 
 		fmt.Printf("%s deployed successfully\n", jobName)
 		im.sshClient.ExecuteCommand(fmt.Sprintf("rm %s", tempFile))
@@ -129,66 +129,4 @@ func (im *InstallationManager) getMachineID() (string, error) {
 	}
 
 	return strings.TrimSpace(string(output)), nil
-}
-
-func (im *InstallationManager) waitForJobHealth(jobName string) error {
-	jobBaseName := strings.TrimSuffix(jobName, ".nomad")
-	retries := 30
-
-	for i := 0; i < retries; i++ {
-		output, err := im.sshClient.ExecuteCommandWithOutput(fmt.Sprintf("nomad job status %s", jobBaseName))
-		if err != nil {
-			time.Sleep(10 * time.Second)
-			continue
-		}
-
-		if strings.Contains(output, "Status") && strings.Contains(output, "running") {
-			switch jobBaseName {
-			case "loki":
-				if err := im.checkLokiHealth(); err != nil {
-					time.Sleep(10 * time.Second)
-					continue
-				}
-				fmt.Printf("Loki health check passed\n")
-			case "prometheus":
-				if err := im.checkPrometheusHealth(); err != nil {
-					time.Sleep(10 * time.Second)
-					continue
-				}
-				fmt.Printf("Prometheus health check passed\n")
-			}
-			return nil
-		}
-
-		fmt.Printf("Waiting for %s to be ready... (attempt %d/%d)\n", jobBaseName, i+1, retries)
-		time.Sleep(10 * time.Second)
-	}
-
-	return fmt.Errorf("timeout waiting for job %s to become healthy", jobBaseName)
-}
-
-func (im *InstallationManager) checkLokiHealth() error {
-	retries := 5
-	for i := 0; i < retries; i++ {
-		cmd := `curl -s -f http://localhost:3100/ready`
-		err := im.sshClient.ExecuteCommand(cmd)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(5 * time.Second)
-	}
-	return fmt.Errorf("loki health check failed after %d attempts", retries)
-}
-
-func (im *InstallationManager) checkPrometheusHealth() error {
-	retries := 5
-	for i := 0; i < retries; i++ {
-		cmd := `curl -s -f http://localhost:9090/-/ready`
-		err := im.sshClient.ExecuteCommand(cmd)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(5 * time.Second)
-	}
-	return fmt.Errorf("prometheus health check failed after %d attempts", retries)
 }

@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -43,40 +42,31 @@ func (im *InstallationManager) InstallBasePackages() error {
 		"sudo apt install -y curl unzip wget ufw coreutils gpg debian-keyring debian-archive-keyring apt-transport-https",
 		"sudo apt update -y",
 
-		// Tailscale installation
 		fmt.Sprintf("curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up --auth-key=%s", im.tailScaleToken),
 
-		// Docker installation
 		"curl -fsSL https://get.docker.com -o get-docker.sh",
 		"sudo sh get-docker.sh",
 		"sudo usermod -aG docker $USER",
 		"sudo apt install -y docker-compose",
 
-		// Node.js installation
 		fmt.Sprintf("curl -fsSL https://deb.nodesource.com/setup_%s | sudo -E bash -", im.config.ClusterConfig.Versions.NodeJS),
 		"sudo apt-get install -y nodejs",
 
-		// Redis installation
 		"apt-get install -y redis-server",
 		"systemctl enable redis-server",
 		"systemctl start redis-server",
 
-		// NVM installation and initialization
 		"curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
 		"export NVM_DIR=\"$HOME/.nvm\" && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && [ -s \"$NVM_DIR/bash_completion\" ] && . \"$NVM_DIR/bash_completion\" && nvm install 20 && nvm use 20",
 
-		// Global npm tools
 		"/root/.nvm/versions/node/v20.18.1/bin/npm install --global yarn",
 		"/root/.nvm/versions/node/v20.18.1/bin/npm install -g pm2",
 
-		// Infisical CLI installation
 		"curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash",
 		"sudo apt-get update && sudo apt-get install -y infisical",
 
-		// Nixpacks installation
 		"curl -sSL https://nixpacks.com/install.sh | bash",
 
-		// Nomad Installation:
 		"curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo tee /tmp/hashicorp.gpg > /dev/null",
 		"sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg /tmp/hashicorp.gpg",
 		"sudo rm /tmp/hashicorp.gpg",
@@ -84,12 +74,10 @@ func (im *InstallationManager) InstallBasePackages() error {
 		"sudo apt update && sudo apt install -y nomad",
 		"sudo apt-get install -y consul-cni",
 
-		// Brimble runner installation
 		"curl -fsSL https://cdn.brimble.io/runner-linux -o runner.sh",
 		"sudo chmod +x runner.sh",
 		"sudo mv runner.sh /usr/local/bin/runner",
 
-		// CNI plugins installation
 		"ARCH_CNI=$( [ $(uname -m) = aarch64 ] && echo arm64 || echo amd64) && CNI_PLUGIN_VERSION=v1.5.1 && curl -L -o cni-plugins.tgz \"https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGIN_VERSION}/cni-plugins-linux-${ARCH_CNI}-${CNI_PLUGIN_VERSION}.tgz\" && sudo mkdir -p /opt/cni/bin && sudo tar -C /opt/cni/bin -xzf cni-plugins.tgz",
 	}
 
@@ -301,8 +289,6 @@ func (im *InstallationManager) SetupNomad() error {
 
 	//use tailscale private ip in production
 
-	fmt.Println(nomadConfig)
-
 	checkServiceCmd := "systemctl is-enabled nomad || true"
 
 	output, err := im.sshClient.ExecuteCommandWithOutput(checkServiceCmd)
@@ -491,14 +477,4 @@ func (im *InstallationManager) getSingleNodeConfig(nodeName string) string {
 	publish_allocation_metrics = true
 	publish_node_metrics = true
  }`, im.config.ClusterConfig.ConsulConfig.Token, nodeName)
-}
-
-func (im *InstallationManager) StartRunner(licenseToken string, instances string) error {
-	instanceCount, err := strconv.Atoi(instances)
-	if err != nil {
-		return fmt.Errorf("invalid instances value: %v", err)
-	}
-
-	command := fmt.Sprintf("runner --license-key=%s --instances=%d", licenseToken, instanceCount)
-	return im.sshClient.ExecuteCommand(command)
 }

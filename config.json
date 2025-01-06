@@ -10,6 +10,10 @@
       }
     ],
     "cluster_config": {
+      "runner": {
+        "port": 3000,
+        "instances": 4
+      },
       "consul": {
         "server_address": "209.97.138.138:8500",
         "token": "14f1f8a7-08cb-20d5-7ee3-XXXXXX",
@@ -24,6 +28,10 @@
         "docker": "latest",
         "nodejs": "20.x", 
         "nomad": "1.6.3"
+      },
+      "docker": {
+        "username": "",
+        "password": ""
       }
     }
    }

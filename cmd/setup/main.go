@@ -212,7 +212,8 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
-				spinner := ui.NewStepSpinner(server.Host)
+				terminalOutput := ui.NewTerminalOutput(server.Host)
+				spinner := ui.NewStepSpinner(server.Host, terminalOutput)
 
 				var (
 					client *ssh.SSHClient
@@ -279,7 +280,7 @@ func main() {
 
 				currentStep, err := database.GetServerStep(machineID, licenseResp.Subscription.ID)
 
-				log.Printf("Debug: Current step for server %s: %s", server.Host, currentStep)
+				// log.Printf("Debug: Current step for server %s: %s", server.Host, currentStep)
 
 				if err != nil {
 					role := "client"
@@ -367,12 +368,8 @@ func main() {
 					case <-ctx.Done():
 						return
 					default:
-						//log.Printf("Debug: Checking step %s (current: %v, required: %v)", step.name, currentStep, step.require)
-
 						requiredStepOrder := stepOrder[step.require]
 						currentLoopStepOrder := stepOrder[step.step]
-
-						//log.Printf("Debug: Current step order: %d, Step loop order: %d, Required step order: %d", currentStepOrder, currentLoopStepOrder, requiredStepOrder)
 
 						if currentStepOrder < currentLoopStepOrder && currentStepOrder >= requiredStepOrder {
 							spinner.Start(step.name)
@@ -382,7 +379,6 @@ func main() {
 								cancel()
 								return
 							}
-							//log.Printf("Debug: Successfully completed step %s, updating currentStep from %v to %v", step.name, currentStep, step.step)
 							currentStep = step.step
 							currentStepOrder = stepOrder[currentStep]
 							if err := database.UpdateServerStep(machineID, step.step); err != nil {
@@ -392,9 +388,7 @@ func main() {
 							}
 							spinner.Stop(true)
 						} else if currentStepOrder >= currentLoopStepOrder {
-							//log.Printf("Debug: Skipping step %s as already completed", step.name)
 						} else {
-							//log.Printf("Debug: Cannot proceed with %s as prerequisite %s not met", step.name, step.require)
 							return
 						}
 					}
