@@ -34,7 +34,7 @@ resource "google_compute_firewall" "nomad_firewall" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "4646", "4647", "4648", "8500", "8600"] # SSH, Nomad, Consul
+    ports    = ["22"] # Just SSH for now
   }
 
   source_ranges = ["0.0.0.0/0"]
@@ -72,7 +72,7 @@ resource "google_compute_instance_group_manager" "nomad_instances" {
   version {
     instance_template = google_compute_instance_template.nomad_template.id
   }
-  
+
   target_size        = var.instance_count
 
   named_port {
