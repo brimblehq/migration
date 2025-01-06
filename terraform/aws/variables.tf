@@ -34,13 +34,13 @@ variable "availability_zone" {
 }
 
 variable "ami" {
-  description = "AMI ID for the Nomad EC2 instances"
+  description = "AMI ID for the EC2 instances"
   type        = string
   default     = "ami-0e2c8caa4b6378d8c"
 }
 
 variable "instance_type" {
-  description = "Instance type for Nomad EC2 instances"
+  description = "Instance type for EC2 instances"
   type        = string
   default     = "t3.medium"
 }
