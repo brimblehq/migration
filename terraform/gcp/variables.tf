@@ -19,7 +19,7 @@ variable "zone" {
 variable "machine_type" {
   description = "Machine type for GCP instances"
   type        = string
-  default     = "e2-standard-2"
+  default     = "e2-medium"
 }
 
 variable "image" {
@@ -31,7 +31,7 @@ variable "image" {
 variable "instance_count" {
   description = "Number of GCP instances"
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "public_ssh_key_path" {

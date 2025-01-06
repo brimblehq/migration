@@ -1,7 +1,7 @@
 variable "instance_count" {
   description = "Number of AWS instances to launch"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "region" {
@@ -42,5 +42,5 @@ variable "ami" {
 variable "instance_type" {
   description = "Instance type for EC2 instances"
   type        = string
-  default     = "t3.medium"
+  default     = "t2.large"
 }
