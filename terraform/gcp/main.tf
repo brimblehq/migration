@@ -14,23 +14,23 @@ provider "google" {
 }
 
 # VPC Network
-resource "google_compute_network" "nomad_network" {
-  name                    = "nomad-network"
+resource "google_compute_network" "brimble_network" {
+  name                    = "brimble-network"
   auto_create_subnetworks = false
 }
 
 # Subnet
-resource "google_compute_subnetwork" "nomad_subnet" {
-  name          = "nomad-subnet"
+resource "google_compute_subnetwork" "brimble_subnet" {
+  name          = "brimble-subnet"
   ip_cidr_range = "10.0.1.0/24"
-  network       = google_compute_network.nomad_network.id
+  network       = google_compute_network.brimble_network.id
   region        = var.region
 }
 
 # Firewall Rules
-resource "google_compute_firewall" "nomad_firewall" {
-  name    = "nomad-firewall"
-  network = google_compute_network.nomad_network.id
+resource "google_compute_firewall" "brimble_firewall" {
+  name    = "brimble-firewall"
+  network = google_compute_network.brimble_network.id
 
   allow {
     protocol = "tcp"
@@ -38,12 +38,12 @@ resource "google_compute_firewall" "nomad_firewall" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["nomad-instance"]
+  target_tags   = ["brimble-instance"]
 }
 
 # Instance Template
-resource "google_compute_instance_template" "nomad_template" {
-  name        = "nomad-instance-template"
+resource "google_compute_instance_template" "brimble_template" {
+  name        = "brimble-instance-template"
   machine_type = var.machine_type
 
   disk {
@@ -53,39 +53,39 @@ resource "google_compute_instance_template" "nomad_template" {
   }
 
   network_interface {
-    subnetwork = google_compute_subnetwork.nomad_subnet.id
+    subnetwork = google_compute_subnetwork.brimble_subnet.id
     access_config {} # Adds external IP
   }
 
   metadata = {
-    ssh-keys = "nomad-user:${file(var.public_ssh_key_path)}"
+    ssh-keys = "brimble-user:${file(var.public_ssh_key_path)}"
   }
 
-  tags = ["nomad-instance"]
+  tags = ["brimble-instance"]
 }
 
 # Managed Instance Group
-resource "google_compute_instance_group_manager" "nomad_instances" {
-  name               = "nomad-instance-group"
-  base_instance_name = "nomad-instance"
+resource "google_compute_instance_group_manager" "brimble_instances" {
+  name               = "brimble-instance-group"
+  base_instance_name = "brimble-instance"
 
   version {
-    instance_template = google_compute_instance_template.nomad_template.id
+    instance_template = google_compute_instance_template.brimble_template.id
   }
 
   target_size        = var.instance_count
 
   named_port {
-    name = "nomad"
+    name = "brimble"
     port = 4646
   }
 }
 
 # Output Instance Group Information
 output "instance_group_name" {
-  value = google_compute_instance_group_manager.nomad_instances.name
+  value = google_compute_instance_group_manager.brimble_instances.name
 }
 
 output "instance_template_name" {
-  value = google_compute_instance_template.nomad_template.name
+  value = google_compute_instance_template.brimble_template.name
 }
