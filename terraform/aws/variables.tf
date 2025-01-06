@@ -1,7 +1,7 @@
 variable "instance_count" {
-    default = 2
-    description = "Number of Nomad instances to launch"
-    type        = number
+  description = "Number of Nomad instances to launch"
+  type        = number
+  default     = 2
 }
 
 variable "region" {
