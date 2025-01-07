@@ -1,41 +1,40 @@
 {
-    "servers": [
-      {
-        "host": "test-2",
-        "username": "root", 
-        "key_path": "~/.ssh/id_rsa",
-        "datacenter": "dc1",
-        "public_ip": "178.128.161.67",
-        "private_ip": "10.106.0.4",
-        "auth_method": "key_path"
-      }
-    ],
-    "cluster_config": {
-      "runner": {
-        "port": 3000,
-        "instances": 4
-      },
-      "consul": {
-        "server_address": "209.97.138.138:8500",
-        "token": "14f1f8a7-08cb-20d5-7ee3-XXXXXX",
-        "datacenter": "dc1",
-        "consul_image": "hashicorp/consul:1.16"
-      },
-      "monitoring": {
-        "grafana_password": "password",
-        "metrics_port": 9100
-      },
-      "versions": {
-        "docker": "latest",
-        "nodejs": "20.x", 
-        "nomad": "1.6.3"
-      },
-      "registry": {
-        "username": "",
-        "password": "",
-        "type": "",
-        "region": "",
-        "projectId": ""
-      }
+  "servers": [
+    {
+      "host": "test-2",
+      "username": "root",
+      "key_path": "~/.ssh/id_rsa",
+      "datacenter": "dc1",
+      "public_ip": "178.128.161.67",
+      "private_ip": "10.106.0.4"
     }
-   }
+  ],
+  "cluster_config": {
+    "runner": {
+      "port": 3000,
+      "instances": 4
+    },
+    "consul": {
+      "server_address": "209.97.138.138:8500",
+      "token": "14f1f8a7-08cb-20d5-7ee3-XXXXXX",
+      "datacenter": "dc1",
+      "consul_image": "hashicorp/consul:1.16"
+    },
+    "monitoring": {
+      "grafana_password": "password",
+      "metrics_port": 9100
+    },
+    "versions": {
+      "docker": "latest",
+      "nodejs": "20.x",
+      "nomad": "1.6.3"
+    },
+    "registry": {
+      "username": "",
+      "password": "",
+      "type": "",
+      "region": "",
+      "projectId": ""
+    }
+  }
+}

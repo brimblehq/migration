@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"log"
@@ -39,6 +40,12 @@ func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []
 }
 
 func (im *InstallationManager) InstallBasePackages() error {
+	registrar := core.NewServerRegistrar(im.sshClient, "https://core.brimble.io", im.LicenseResponse)
+
+	if err := registrar.RegisterAndSetupTunnel(context.Background(), im.LicenseResponse.Tag); err != nil {
+		return fmt.Errorf("failed to register server and setup tunnel: %w", err)
+	}
+
 	commands := []string{
 		"sudo apt-get update",
 		"sudo apt-get upgrade -y",

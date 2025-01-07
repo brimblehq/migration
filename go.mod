@@ -55,6 +55,7 @@ require (
 
 require (
 	github.com/fatih/color v1.7.0
+	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.8 // indirect
