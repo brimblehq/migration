@@ -372,6 +372,56 @@ func (p *PostgresDB) GetExpiredUncleaned(ctx context.Context) ([]TempSSHKey, err
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	// fmt.Printf("Total keys found: %d\n", len(keys))
+	fmt.Printf("Total keys found: %d\n", len(keys))
 	return keys, nil
+}
+
+func (p *PostgresDB) SaveConsulAddress(address, machineID string) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	query := `
+        UPDATE servers 
+        SET consul_address = $1,
+            updated_at = NOW()
+        WHERE machine_id = $2`
+
+	fmt.Printf("Executing SQL: %s with params [address=%s, machineID=%s]\n",
+		query, address, machineID)
+
+	result, err := tx.Exec(query, address, machineID)
+	if err != nil {
+		return fmt.Errorf("failed to update consul address: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("no server found with machine_id: %s", machineID)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+func (p *PostgresDB) GetConsulAddress() (string, error) {
+	var addr string
+	err := p.db.QueryRow(`
+        SELECT consul_address 
+        FROM servers 
+        WHERE consul_address IS NOT NULL 
+        LIMIT 1`).Scan(&addr)
+
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("no consul server address found")
+	}
+	return addr, err
 }

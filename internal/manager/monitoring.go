@@ -25,9 +25,12 @@ func (im *InstallationManager) SetupMonitoring() error {
 	}
 
 	jobOrder := map[string]int{
-		"loki.nomad":       1,
-		"prometheus.nomad": 2,
-		"grafana.nomad":    3,
+		"loki.nomad":          1,
+		"cadvisor.nomad":      2,
+		"node-exporter.nomad": 3,
+		"promtail.nomad":      4,
+		"prometheus.nomad":    5,
+		"grafana.nomad":       6,
 	}
 
 	var orderedJobs []string

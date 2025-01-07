@@ -215,6 +215,7 @@ func main() {
 				spinner.Start("Getting machine info")
 
 				machineID, err := client.ExecuteCommandWithOutput("cat /etc/machine-id")
+				machineID = strings.TrimSuffix(machineID, "\n")
 				if err != nil {
 					setupFailed = true
 					spinner.Stop(false)
@@ -294,7 +295,7 @@ func main() {
 					},
 					{
 						name:    "Setting up Consul client",
-						fn:      im.SetupConsulClient,
+						fn:      im.SetupConsul,
 						step:    types.StepConsulSetup,
 						require: types.StepBaseInstalled,
 					},

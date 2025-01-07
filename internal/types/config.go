@@ -9,7 +9,7 @@ type Server struct {
 	Host       string `json:"host"`
 	Username   string `json:"username"`
 	KeyPath    string `json:"key_path,omitempty"`
-	DataCenter string `json:"datacenter"`
+	Region     string `json:"region"`
 	PublicIP   string `json:"public_ip"`
 	PrivateIP  string `json:"private_ip"`
 	AuthMethod string `json:"auth_method,omitempty"`
@@ -23,10 +23,7 @@ type ClusterConfig struct {
 }
 
 type ConsulConfig struct {
-	ServerAddress string `json:"server_address"`
-	Token         string `json:"token"`
-	DataCenter    string `json:"datacenter"`
-	ConsulImage   string `json:"consul_image"`
+	ConsulImage string `json:"consul_image"`
 }
 
 type MonitoringConfig struct {

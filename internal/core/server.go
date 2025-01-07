@@ -80,12 +80,12 @@ func (sr *ServerRegistrar) RegisterAndSetupTunnel(ctx context.Context, tag strin
 		return fmt.Errorf("failed to setup tunnel: %w", err)
 	}
 
-	status, err := sr.getTunnelStatus()
+	// status, err := sr.getTunnelStatus()
 
-	if err != nil {
-		return fmt.Errorf("tunnel setup complete but status check failed: %w", err)
-	}
-	log.Printf("Tunnel Status: %s", status)
+	// if err != nil {
+	// 	return fmt.Errorf("tunnel setup complete but status check failed: %w", err)
+	// }
+	// log.Printf("Tunnel Status: %s", status)
 
 	return nil
 }
@@ -239,13 +239,13 @@ func (sr *ServerRegistrar) stopTunnel() error {
 	return nil
 }
 
-func (sr *ServerRegistrar) getTunnelStatus() (string, error) {
-	output, err := sr.sshClient.ExecuteCommandWithOutput("sudo cloudflared tunnel info")
-	if err != nil {
-		return "", fmt.Errorf("failed to get tunnel info: %w", err)
-	}
-	return output, nil
-}
+// func (sr *ServerRegistrar) getTunnelStatus() (string, error) {
+// 	output, err := sr.sshClient.ExecuteCommandWithOutput("sudo cloudflared tunnel info")
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to get tunnel info: %w", err)
+// 	}
+// 	return output, nil
+// }
 
 func (sr *ServerRegistrar) setupTunnel(tunnelToken string) error {
 	isRunning, err := sr.isCloudflaredRunning()
