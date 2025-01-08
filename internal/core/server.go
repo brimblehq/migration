@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/brimblehq/migration/internal/ssh"
+	"github.com/brimblehq/migration/internal/types"
 	"github.com/google/uuid"
 )
 
@@ -48,10 +49,10 @@ type ServerRegistrar struct {
 	client         *http.Client
 	sshClient      *ssh.SSHClient
 	apiBaseURL     string
-	licenseReponse *LicenseResponse
+	licenseReponse *types.LicenseResponse
 }
 
-func NewServerRegistrar(sshClient *ssh.SSHClient, apiBaseURL string, licenseReponse *LicenseResponse) *ServerRegistrar {
+func NewServerRegistrar(sshClient *ssh.SSHClient, apiBaseURL string, licenseReponse *types.LicenseResponse) *ServerRegistrar {
 	return &ServerRegistrar{
 		client:         &http.Client{Timeout: 30 * time.Second},
 		sshClient:      sshClient,

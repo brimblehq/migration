@@ -16,7 +16,7 @@ type PostgresDB struct {
 	db *sql.DB
 }
 
-type Config struct {
+type DbConfig struct {
 	URI string
 }
 
@@ -31,16 +31,25 @@ type TempSSHKey struct {
 	Servers            []string   `json:"servers"`
 }
 
-func NewPostgresDB(config Config) (*PostgresDB, error) {
-	// fmt.Println(config.URI)
-	// postgresql://postgres:xhGUnf75yy3Afyb@db.bwpuiyfchjkhezkypxpm.supabase.co:5432/postgres
+func NewPostgresDB(config DbConfig) (*PostgresDB, error) {
+	db, err := sql.Open("postgres", fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		"aws-0-eu-west-2.pooler.supabase.com", 6543, "postgres.bwpuiyfchjkhezkypxpm", "xhGUnf75yy3Afyb#", "postgres", "require",
+	))
 
-	db, err := sql.Open("postgres", "postgresql://ileri:password@localhost:5411/defaultdb?sslmode=disable")
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to database: %v", err)
 	}
 
-	if err := db.Ping(); err != nil {
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Hour)
+	db.SetConnMaxIdleTime(30 * time.Minute)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("error pinging database: %v", err)
 	}
 
@@ -52,6 +61,9 @@ func (p *PostgresDB) Close() error {
 }
 
 func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string, identifier string, step types.ServerStep) error {
+	fmt.Printf("Input parameters: machineID=%s, publicIP=%s, privateIP=%s, role=%s, identifier=%s, step=%v\n",
+		machineID, publicIP, privateIP, role, identifier, step)
+
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %v", err)
@@ -69,7 +81,6 @@ func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string,
         ON CONFLICT (machine_id) DO UPDATE
         SET status = $5, updated_at = $8
     `
-
 	_, err = tx.Exec(query,
 		machineID,
 		publicIP,
@@ -80,6 +91,8 @@ func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string,
 		step,
 		time.Now(),
 	)
+
+	fmt.Printf("ERROR: %v", err)
 
 	if err != nil {
 		return fmt.Errorf("failed to execute query: %v", err)

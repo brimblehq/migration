@@ -1,0 +1,334 @@
+[
+    {
+        "id" : "85dc39ea-7204-439c-b15a-9cec5640ea56",
+        "name": "aws",
+        "machines": [
+            {
+                "size": "t3.xlarge",
+                "region": {
+                    "name": "us-east-1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "t3.xlarge",
+                "region": {
+                    "name": "eu-west-1",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "m5.2xlarge",
+                "region": {
+                    "name": "us-east-1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "m5.2xlarge",
+                "region": {
+                    "name": "eu-west-1",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "c5.4xlarge",
+                "region": {
+                    "name": "us-east-1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Compute optimized - 16 vCPU, 32 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "c5.4xlarge",
+                "region": {
+                    "name": "eu-west-1",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Compute optimized - 16 vCPU, 32 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "r5.4xlarge",
+                "region": {
+                    "name": "us-east-1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Memory optimized - 16 vCPU, 128 GB RAM",
+                "use_case": "Nomad client node - memory intensive workloads",
+                "recommended_role": "client"
+            }
+        ]
+    },
+    {
+        "id": "6d4782f8-8ab6-437b-aacd-36c4ef4c5108",
+        "name": "gcp",
+        "machines": [
+            {
+                "size": "e2-standard-4",
+                "region": {
+                    "name": "us-central1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "e2-standard-4",
+                "region": {
+                    "name": "europe-west4",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "n2-standard-8",
+                "region": {
+                    "name": "us-central1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "n2-standard-8",
+                "region": {
+                    "name": "europe-west4",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "c2-standard-16",
+                "region": {
+                    "name": "us-central1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Compute optimized - 16 vCPU, 64 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "c2-standard-16",
+                "region": {
+                    "name": "europe-west4",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Compute optimized - 16 vCPU, 64 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "m1-megamem-96",
+                "region": {
+                    "name": "us-central1",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Memory optimized - 96 vCPU, 1.4 TB RAM",
+                "use_case": "Nomad client node - large memory intensive workloads",
+                "recommended_role": "client"
+            }
+        ]
+    },
+    {
+        "id": "466da0fc-7893-471d-aa2e-339437dadc0f",
+        "name": "digitalocean",
+        "machines": [
+            {
+                "size": "s-4vcpu-16gb",
+                "region": {
+                    "name": "nyc3",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "s-4vcpu-16gb",
+                "region": {
+                    "name": "ams3",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "g-8vcpu-32gb",
+                "region": {
+                    "name": "nyc3",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "g-8vcpu-32gb",
+                "region": {
+                    "name": "ams3",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "c-16",
+                "region": {
+                    "name": "nyc3",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "CPU-Optimized - 16 vCPU, 32 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "c-16",
+                "region": {
+                    "name": "ams3",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "CPU-Optimized - 16 vCPU, 32 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "m-16vcpu-128gb",
+                "region": {
+                    "name": "nyc3",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Memory-Optimized - 16 vCPU, 128 GB RAM",
+                "use_case": "Nomad client node - memory intensive workloads",
+                "recommended_role": "client"
+            }
+        ]
+    },
+    {
+        "id": "a08c2c89-5a99-4849-bc6d-b8398bd82ae0",
+        "name": "hetzner",
+        "machines": [
+            {
+                "size": "cpx41",
+                "region": {
+                    "name": "us-east",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "cpx41",
+                "region": {
+                    "name": "eu-central",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 4 vCPU, 16 GB RAM",
+                "use_case": "Development/Small Nomad client node",
+                "recommended_role": "client"
+            },
+            {
+                "size": "ccx63",
+                "region": {
+                    "name": "us-east",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "ccx63",
+                "region": {
+                    "name": "eu-central",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "General purpose - 8 vCPU, 32 GB RAM",
+                "use_case": "Nomad server node",
+                "recommended_role": "server"
+            },
+            {
+                "size": "ccx83",
+                "region": {
+                    "name": "us-east",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Compute optimized - 16 vCPU, 32 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "ccx83",
+                "region": {
+                    "name": "eu-central",
+                    "type": "europe"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Compute optimized - 16 vCPU, 32 GB RAM",
+                "use_case": "Nomad client node - compute workloads",
+                "recommended_role": "client"
+            },
+            {
+                "size": "ccx113",
+                "region": {
+                    "name": "us-east",
+                    "type": "america"
+                },
+                "image": "ubuntu-22-04-x64",
+                "description": "Memory optimized - 16 vCPU, 128 GB RAM",
+                "use_case": "Nomad client node - memory intensive workloads",
+                "recommended_role": "client"
+            }
+        ]
+    }
+]

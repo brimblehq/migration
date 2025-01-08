@@ -3,26 +3,29 @@ package manager
 import (
 	"crypto/sha256"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
-func (im *InstallationManager) StartRunner(licenseKey string, instances string) error {
-	instanceCount, err := strconv.Atoi(instances)
-	if err != nil {
-		return fmt.Errorf("invalid instances value: %v", err)
-	}
+func (im *InstallationManager) StartRunner(licenseKey string, instances int) error {
+	fmt.Println("Starting runner")
+	fmt.Println(licenseKey)
+	fmt.Println(instances)
+	return nil
+	// instanceCount, err := strconv.Atoi(instances)
+	// if err != nil {
+	// 	return fmt.Errorf("invalid instances value: %v", err)
+	// }
 
-	envVars := enivornmentVariablesBuilder()
+	// envVars := enivornmentVariablesBuilder()
 
-	err = createSystemDaemonSetup(im, envVars, licenseKey, instanceCount)
-	if err != nil {
-		return fmt.Errorf("unable to setup runner on machine")
-	}
+	// err = createSystemDaemonSetup(im, envVars, licenseKey, instanceCount)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to setup runner on machine")
+	// }
 
-	command := fmt.Sprintf("runner --license-key %s --instances %d", licenseKey, instanceCount)
-	fmt.Println(command)
-	return im.sshClient.ExecuteCommand(command)
+	// command := fmt.Sprintf("runner --license-key %s --instances %d", licenseKey, instanceCount)
+	// fmt.Println(command)
+	// return im.sshClient.ExecuteCommand(command)
 }
 
 func createSystemDaemonSetup(im *InstallationManager, envVars map[string]string, licenseKey string, instances int) error {

@@ -1,8 +1,45 @@
 package types
 
+import (
+	"time"
+)
+
 type Config struct {
 	Servers       []Server      `json:"servers"`
 	ClusterConfig ClusterConfig `json:"cluster_config"`
+}
+
+type LicenseResponse struct {
+	Valid        bool                 `json:"valid"`
+	Key          string               `json:"key"`
+	ExpireIn     *string              `json:"expireIn"`
+	Tag          string               `json:"tag"`
+	Subscription SubscriptionResponse `json:"subscription,omitempty"`
+}
+
+type SubscriptionResponse struct {
+	ID             string    `json:"_id"`
+	AdminID        string    `json:"admin_id"`
+	BillableID     string    `json:"billable_id"`
+	ProjectID      *string   `json:"project_id"`
+	PlanType       string    `json:"plan_type"`
+	Status         string    `json:"status"`
+	DebitDate      time.Time `json:"debit_date"`
+	StartDate      time.Time `json:"start_date"`
+	ExpiryDate     time.Time `json:"expiry_date"`
+	TriggerCreated bool      `json:"trigger_created"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	Version        int       `json:"__v"`
+	JobIdentifier  string    `json:"job_identifier"`
+}
+
+type FlagConfig struct {
+	LicenseKey string
+	Instances  string
+	ConfigPath string
+	UseTemp    bool
+	Provision  bool
 }
 
 type Server struct {

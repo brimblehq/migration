@@ -21,10 +21,10 @@ type InstallationManager struct {
 	files           embed.FS
 	tailScaleToken  string
 	DB              *db.PostgresDB
-	LicenseResponse *core.LicenseResponse
+	LicenseResponse *types.LicenseResponse
 }
 
-func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config, tailScaleToken string, db *db.PostgresDB, lisResp *core.LicenseResponse) *InstallationManager {
+func NewInstallationManager(client *ssh.SSHClient, server types.Server, roles []types.ClusterRole, config *types.Config, tailScaleToken string, db *db.PostgresDB, lisResp *types.LicenseResponse) *InstallationManager {
 	return &InstallationManager{
 		sshClient:       client,
 		server:          server,

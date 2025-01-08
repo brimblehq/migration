@@ -14,7 +14,7 @@ const (
 )
 
 type ServerState struct {
-	ID          int        `db:"id"`
+	ID          string     `db:"id"`
 	MachineID   string     `db:"machine_id"`
 	PublicIP    string     `db:"public_ip"`
 	PrivateIP   string     `db:"private_ip"`

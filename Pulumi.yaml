@@ -1,0 +1,3 @@
+name: serverProvision
+runtime: go
+main: /Users/icon/documents/work/migration
