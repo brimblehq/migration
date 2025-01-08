@@ -242,7 +242,6 @@ func (p *PostgresDB) GetMachinesByProviderAndRegion(providerName string, regionT
 
 // in db/postgres.go
 func (p *PostgresDB) GetProviderRegions(providerID string) ([]types.RegionOption, error) {
-	fmt.Printf("PROVIDER ID :%s", providerID)
 	query := `
 	SELECT DISTINCT 
     r.type AS region_type,

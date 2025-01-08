@@ -1,12 +1,8 @@
 package types
 
-import "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-
-type CloudProvisioner interface {
-	ProvisionServers(ctx *pulumi.Context, config ProvisionServerConfig) (*ProvisionResult, error)
-	ValidateConfig(config ProvisionServerConfig) error
-	GetProviderName() string
-}
+import (
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+)
 
 type ProvisionServerConfig struct {
 	Name   string

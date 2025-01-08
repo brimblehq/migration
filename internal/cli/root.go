@@ -64,7 +64,7 @@ func Execute() {
 		os.Exit(1)
 	}()
 
-	rootCmd.SilenceErrors = true
+	rootCmd.SilenceErrors = false
 	rootCmd.SilenceUsage = true
 
 	if err := rootCmd.Execute(); err != nil {
@@ -83,13 +83,21 @@ func init() {
 }
 
 func runProvision(cmd *cobra.Command, args []string) error {
-	database, err := setupDatabase()
+	database, _, _, maxDevices, err := setupInitialServices()
 	if err != nil {
-		return fmt.Errorf("failed to setup database: %v", err)
+		return fmt.Errorf("failed to setup initial services: %v", err)
 	}
 	defer database.Close()
 
-	if err := infra.ProvisionInfrastructure(database); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	sshManager, err := setupSSHManager(ctx, database, maxDevices)
+	if err != nil {
+		return err
+	}
+
+	if err := infra.ProvisionInfrastructure(licenseKey, database, sshManager); err != nil {
 		return err
 	}
 
@@ -110,7 +118,6 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	database, _, decryptedTailScale, maxDevices, err := setupInitialServices()
-
 	if err != nil {
 		return err
 	}
@@ -119,8 +126,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	setupManager := ssh.NewSSHSetupManager(database, &config)
-	sshManager, err := setupManager.ValidateAndInitializeSSH(ctx, useTemp, maxDevices)
+	sshManager, err := setupSSHManager(ctx, database, maxDevices)
 	if err != nil {
 		return err
 	}
@@ -234,37 +240,31 @@ func processServer(ctx context.Context, server types.Server, sshManager *ssh.Tem
 	return nil
 }
 
-func setupDatabase() (*db.PostgresDB, error) {
-	dbUrl, tailScaleToken, _, err := core.GetDatabaseUrl(licenseKey)
+func setupSSHManager(ctx context.Context, database *db.PostgresDB, maxDevices int) (*ssh.TempSSHManager, error) {
+	fmt.Println("Setting up SSH Manager...")
+
+	configFile, err := os.ReadFile(configPath)
+	var config types.Config
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to get database URL: %v", err)
+		config = types.Config{}
+	} else {
+		if err := json.Unmarshal(configFile, &config); err != nil {
+			return nil, fmt.Errorf("error parsing config: %v", err)
+		}
 	}
 
-	ctx := context.Background()
-	client, err := auth.InitializeInfisical(ctx, infisicalSiteURL)
+	setupManager := ssh.NewSSHSetupManager(database, &config)
+
+	sshManager, err := setupManager.ValidateAndInitializeSSH(ctx, useTemp, maxDevices)
 	if err != nil {
-		return nil, fmt.Errorf("authentication failed: %v", err)
+		return nil, fmt.Errorf("failed to initialize SSH: %v", err)
 	}
 
-	apiKeySecret, err := client.Secrets().Retrieve(infisical.RetrieveSecretOptions{
-		SecretKey:   "CLI_DECRYPTION_KEY",
-		Environment: "staging",
-		ProjectID:   projectID,
-		SecretPath:  "/",
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving secret: %v", err)
+	if sshManager == nil {
+		return nil, fmt.Errorf("SSH manager is nil after initialization")
 	}
 
-	decryptedDB, _, err := auth.GetDecryptedSecrets(dbUrl, tailScaleToken, apiKeySecret.SecretValue)
-	if err != nil {
-		return nil, err
-	}
-
-	database, err := db.NewPostgresDB(db.DbConfig{URI: decryptedDB})
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %v", err)
-	}
-
-	return database, nil
+	fmt.Println("SSH Manager successfully initialized")
+	return sshManager, nil
 }

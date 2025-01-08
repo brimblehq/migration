@@ -1,9 +1,11 @@
 package provision
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi-digitalocean/sdk/v4/go/digitalocean"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -22,7 +24,40 @@ func (p *DigitalOceanProvisioner) ValidateConfig(config types.ProvisionServerCon
 	return nil
 }
 
-func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig) (*types.ProvisionResult, error) {
+func (p *DigitalOceanProvisioner) getOrCreateVPC(ctx *pulumi.Context, vpcName, region string, provider *digitalocean.Provider) (*digitalocean.Vpc, error) {
+	existingVPC, err := digitalocean.LookupVpc(ctx, &digitalocean.LookupVpcArgs{
+		Name: &vpcName,
+	}, pulumi.Provider(provider))
+
+	if err == nil && existingVPC != nil {
+		vpc, err := digitalocean.NewVpc(ctx, vpcName, &digitalocean.VpcArgs{
+			Name:    pulumi.String(vpcName),
+			Region:  pulumi.String(region),
+			IpRange: pulumi.String(existingVPC.IpRange),
+		},
+			pulumi.Provider(provider),
+			pulumi.Import(pulumi.ID(existingVPC.Id)))
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to reference existing vpc: %v", err)
+		}
+		return vpc, nil
+	}
+
+	vpc, err := digitalocean.NewVpc(ctx, vpcName, &digitalocean.VpcArgs{
+		Name:    pulumi.String(vpcName),
+		Region:  pulumi.String(region),
+		IpRange: pulumi.String("10.10.10.0/24"),
+	}, pulumi.Provider(provider))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new vpc: %v", err)
+	}
+
+	return vpc, nil
+}
+
+func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
 	digitaloceanProvider, err := digitalocean.NewProvider(ctx, "digitalocean", &digitalocean.ProviderArgs{
 		Token: pulumi.String(os.Getenv("DIGITALOCEAN_ACCESS_TOKEN")),
 	})
@@ -37,25 +72,24 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
+	publicKey, err := tempSSHManager.GenerateKeys(context.Background())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate keys: %v", err)
+	}
+
 	sshKey, err := digitalocean.NewSshKey(ctx, fmt.Sprintf("%s-key", config.Name), &digitalocean.SshKeyArgs{
 		Name:      pulumi.String(fmt.Sprintf("%s-key", config.Name)),
-		PublicKey: pulumi.String(config.SSHKey),
+		PublicKey: pulumi.String(publicKey),
 	}, pulumi.Provider(digitaloceanProvider))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH key: %v", err)
 	}
 
-	vpc, err := digitalocean.NewVpc(ctx, fmt.Sprintf("%s-vpc", config.Name), &digitalocean.VpcArgs{
-		Name:    pulumi.String("brimble-network"),
-		Region:  pulumi.String(config.Region),
-		IpRange: pulumi.String("10.10.10.0/24"),
-	},
-		pulumi.Provider(digitaloceanProvider),
-		pulumi.IgnoreChanges([]string{"name"}))
-
+	vpc, err := p.getOrCreateVPC(ctx, "brimble-network", config.Region, digitaloceanProvider)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create vpc network : %v", err)
+		return nil, fmt.Errorf("failed to get or create vpc: %v", err)
 	}
 
 	for i := 0; i < config.Count; i++ {

@@ -21,7 +21,7 @@ type DbConfig struct {
 }
 
 type TempSSHKey struct {
-	ID                 int64      `json:"id"`
+	ID                 string     `json:"id"`
 	KeyID              string     `json:"key_id"`
 	PublicKey          string     `json:"public_key"`
 	CreatedAt          time.Time  `json:"created_at"`
@@ -52,6 +52,8 @@ func NewPostgresDB(config DbConfig) (*PostgresDB, error) {
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("error pinging database: %v", err)
 	}
+
+	fmt.Println("Connected to database ✅")
 
 	return &PostgresDB{db: db}, nil
 }

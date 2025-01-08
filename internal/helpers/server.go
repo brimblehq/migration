@@ -1,8 +1,10 @@
 package helpers
 
 import (
+	"crypto/rand"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/types"
@@ -61,4 +63,15 @@ func ProcessErrors(errorChan chan error) error {
 	}
 
 	return nil
+}
+
+func GenerateKeyID() (string, error) {
+	timestamp := time.Now().Unix()
+	randomBytes := make([]byte, 4)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	keyID := fmt.Sprintf("brimble-temp-%d-%x", timestamp, randomBytes)
+
+	return keyID, nil
 }

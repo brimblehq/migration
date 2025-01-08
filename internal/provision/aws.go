@@ -1,8 +1,10 @@
 package provision
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi-aws/sdk/v5/go/aws/ec2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -21,7 +23,13 @@ func (p *AWSProvisioner) ValidateConfig(config types.ProvisionServerConfig) erro
 	return nil
 }
 
-func (p *AWSProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig) (*types.ProvisionResult, error) {
+func (p *AWSProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
+	publicKey, err := tempSSHManager.GenerateKeys(context.Background())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate keys: %v", err)
+	}
+
 	result := &types.ProvisionResult{
 		Provider: p.GetProviderName(),
 		Region:   config.Region,
@@ -112,7 +120,7 @@ func (p *AWSProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 
 	keyPair, err := ec2.NewKeyPair(ctx, fmt.Sprintf("%s-key", config.Name), &ec2.KeyPairArgs{
 		KeyName:   pulumi.String(fmt.Sprintf("%s-key", config.Name)),
-		PublicKey: pulumi.String(config.SSHKey),
+		PublicKey: pulumi.String(publicKey),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key pair: %v", err)

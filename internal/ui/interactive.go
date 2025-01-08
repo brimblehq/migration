@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/brimblehq/migration/internal/db"
-	"github.com/brimblehq/migration/internal/provision/keygen"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/manifoldco/promptui"
 )
@@ -144,12 +143,6 @@ func InteractiveProvisioning(database *db.PostgresDB) (string, *types.ProvisionS
 		fmt.Printf("\n✅ Found %s credentials in environment\n", selectedProvider.ID)
 	}
 
-	publicKey, err := keygen.GenerateSSHKey()
-
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate SSH key: %v", err)
-	}
-
 	config := &types.ProvisionServerConfig{
 		Name:   selectedMachine.ID,
 		Size:   selectedMachine.Size,
@@ -157,7 +150,6 @@ func InteractiveProvisioning(database *db.PostgresDB) (string, *types.ProvisionS
 		Image:  selectedMachine.Image,
 		Count:  count,
 		Tags:   []string{"brimble", selectedMachine.Role},
-		SSHKey: publicKey,
 	}
 
 	fmt.Printf("\n🚀 Provisioning Summary:\n")

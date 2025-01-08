@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/brimblehq/migration/internal/ui"
 	"golang.org/x/crypto/ssh"
@@ -40,12 +41,11 @@ type TempSSHManager struct {
 }
 
 func NewTempSSHManager(db *db.PostgresDB, servers []string) (*TempSSHManager, error) {
-	timestamp := time.Now().Unix()
-	randomBytes := make([]byte, 4)
-	if _, err := rand.Read(randomBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate random bytes: %w", err)
+	keyID, err := helpers.GenerateKeyID()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key ID: %w", err)
 	}
-	keyID := fmt.Sprintf("brimble-temp-%d-%x", timestamp, randomBytes)
 
 	tmpDir := filepath.Join(os.TempDir(), "brimble-ssh")
 
@@ -62,15 +62,15 @@ func NewTempSSHManager(db *db.PostgresDB, servers []string) (*TempSSHManager, er
 	}, nil
 }
 
-func (m *TempSSHManager) GenerateKeys(ctx context.Context) error {
+func (m *TempSSHManager) GenerateKeys(ctx context.Context) (string, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return fmt.Errorf("failed to generate private key: %w", err)
+		return "", fmt.Errorf("failed to generate private key: %w", err)
 	}
 
 	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		return fmt.Errorf("failed to generate public key: %w", err)
+		return "", fmt.Errorf("failed to generate public key: %w", err)
 	}
 
 	m.publicKey = bytes.TrimSpace(ssh.MarshalAuthorizedKey(publicKey))
@@ -78,7 +78,7 @@ func (m *TempSSHManager) GenerateKeys(ctx context.Context) error {
 	m.privateKey = privateKey
 
 	if err := m.savePrivateKey(); err != nil {
-		return fmt.Errorf("failed to save private key: %w", err)
+		return "", fmt.Errorf("failed to save private key: %w", err)
 	}
 	_, err = m.db.CreateTempSSHKey(
 		ctx,
@@ -87,10 +87,10 @@ func (m *TempSSHManager) GenerateKeys(ctx context.Context) error {
 		m.servers,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to register key in database: %w", err)
+		return "", fmt.Errorf("failed to register key in database: %w", err)
 	}
 
-	return nil
+	return string(m.publicKey), nil
 }
 
 func (m *TempSSHManager) ValidateKey(ctx context.Context) error {

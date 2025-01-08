@@ -1,8 +1,10 @@
 package provision
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp/compute"
@@ -22,7 +24,13 @@ func (p *GCPProvisioner) ValidateConfig(config types.ProvisionServerConfig) erro
 	return nil
 }
 
-func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig) (*types.ProvisionResult, error) {
+func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
+	publicKey, err := tempSSHManager.GenerateKeys(context.Background())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate keys: %v", err)
+	}
+
 	gcpProvider, err := gcp.NewProvider(ctx, "gcp", &gcp.ProviderArgs{
 		Credentials: pulumi.String(""),
 		Region:      pulumi.String(config.Region),
@@ -103,7 +111,7 @@ func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 			return nil, fmt.Errorf("failed to create internal IP for %s: %v", name, err)
 		}
 
-		sshMetadata := fmt.Sprintf("#!/bin/bash\necho '%s' >> /root/.ssh/authorized_keys", config.SSHKey)
+		sshMetadata := fmt.Sprintf("#!/bin/bash\necho '%s' >> /root/.ssh/authorized_keys", publicKey)
 
 		instance, err := compute.NewInstance(ctx, name, &compute.InstanceArgs{
 			Name:        pulumi.String(name),

@@ -9,6 +9,7 @@ import (
 
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/helpers"
+	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/ui"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto/optup"
@@ -17,7 +18,7 @@ import (
 	provisioner "github.com/brimblehq/migration/internal/provision"
 )
 
-func ProvisionInfrastructure(database *db.PostgresDB) error {
+func ProvisionInfrastructure(licenseKey string, database *db.PostgresDB, tempSSHManager *ssh.TempSSHManager) error {
 	provider, setup, err := ui.InteractiveProvisioning(database)
 	if err != nil {
 		return fmt.Errorf("failed to provision servers: %v", err)
@@ -35,9 +36,11 @@ func ProvisionInfrastructure(database *db.PostgresDB) error {
 
 	os.Setenv("PULUMI_HOME", "./.pulumi")
 
-	s, err := auto.UpsertStackInlineSource(context.Background(), "provision", "serverProvision",
+	stackName := fmt.Sprintf("%s-%s", provider, licenseKey)
+
+	s, err := auto.UpsertStackInlineSource(context.Background(), stackName, "brimble-provision",
 		func(pulumiCtx *pulumi.Context) error {
-			return provisioner.ProvisionInfrastructure(pulumiCtx, provider, setup)
+			return provisioner.ProvisionInfrastructure(pulumiCtx, provider, setup, tempSSHManager)
 		},
 		workspaceOpts[0],
 	)

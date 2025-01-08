@@ -1,10 +1,14 @@
 package provision
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strconv"
 
+	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
+	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-hcloud/sdk/go/hcloud"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -22,9 +26,17 @@ func (p *HetznerProvisioner) ValidateConfig(config types.ProvisionServerConfig) 
 	return nil
 }
 
-func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig) (*types.ProvisionResult, error) {
+func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
+	publicKey, err := tempSSHManager.GenerateKeys(context.Background())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate keys: %v", err)
+	}
+
+	uniqueID := fmt.Sprintf("%s-%s", config.Name, uuid.New().String()[:8])
+
 	hcloudProvider, err := hcloud.NewProvider(ctx, "hcloud", &hcloud.ProviderArgs{
-		Token: pulumi.String(""),
+		Token: pulumi.String(os.Getenv("HCLOUD_TOKEN")),
 	})
 
 	if err != nil {
@@ -37,33 +49,51 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
-	for i := 0; i < config.Count; i++ {
-		name := fmt.Sprintf("%s-%d", config.Name, i+1)
+	sshKeyName := fmt.Sprintf("%s-key", uniqueID)
 
-		primaryIP, err := hcloud.NewPrimaryIp(ctx, fmt.Sprintf("%s-ip", name), &hcloud.PrimaryIpArgs{
-			Name:         pulumi.String(fmt.Sprintf("%s-ip", name)),
+	sshKey, err := hcloud.NewSshKey(ctx, sshKeyName, &hcloud.SshKeyArgs{
+		Name:      pulumi.String(sshKeyName),
+		PublicKey: pulumi.String(publicKey),
+		Labels: pulumi.StringMap{
+			"Name":     pulumi.String(sshKeyName),
+			"Provider": pulumi.String("brimble"),
+			"RunID":    pulumi.String(uniqueID),
+		},
+	}, pulumi.Provider(hcloudProvider))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SSH key: %v", err)
+	}
+
+	for i := 0; i < config.Count; i++ {
+		serverName := fmt.Sprintf("%s-%d", uniqueID, i+1)
+		ipName := fmt.Sprintf("%s-ip", serverName)
+
+		primaryIP, err := hcloud.NewPrimaryIp(ctx, ipName, &hcloud.PrimaryIpArgs{
+			Name:         pulumi.String(ipName),
 			Type:         pulumi.String("ipv4"),
 			Datacenter:   pulumi.String(config.Region),
 			AssigneeType: pulumi.String("server"),
 			AutoDelete:   pulumi.Bool(true),
 			Labels: pulumi.StringMap{
-				"Name":     pulumi.String(name),
+				"Name":     pulumi.String(serverName),
 				"Provider": pulumi.String("brimble"),
+				"RunID":    pulumi.String(uniqueID),
 			},
 		}, pulumi.Provider(hcloudProvider))
 		if err != nil {
-			return nil, fmt.Errorf("failed to create primary IP for server %s: %v", name, err)
+			return nil, fmt.Errorf("failed to create primary IP for server %s: %v", serverName, err)
 		}
 
 		ipv4Address := primaryIP.ID().ToStringOutput().ApplyT(func(id string) *int { i, _ := strconv.Atoi(id); return &i }).(pulumi.IntPtrInput)
 
-		server, err := hcloud.NewServer(ctx, name, &hcloud.ServerArgs{
-			Name:       pulumi.String(name),
+		server, err := hcloud.NewServer(ctx, serverName, &hcloud.ServerArgs{
+			Name:       pulumi.String(serverName),
 			ServerType: pulumi.String(config.Size),
 			Image:      pulumi.String(config.Image),
 			Datacenter: pulumi.String(config.Region),
 			SshKeys: pulumi.StringArray{
-				pulumi.String(config.SSHKey),
+				sshKey.ID().ToStringOutput(),
 			},
 			PublicNets: hcloud.ServerPublicNetArray{
 				&hcloud.ServerPublicNetArgs{
@@ -73,12 +103,13 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 				},
 			},
 			Labels: pulumi.StringMap{
-				"Name":     pulumi.String(name),
+				"Name":     pulumi.String(serverName),
 				"Provider": pulumi.String("brimble"),
+				"RunID":    pulumi.String(uniqueID),
 			},
 		}, pulumi.Provider(hcloudProvider))
 		if err != nil {
-			return nil, fmt.Errorf("failed to create server %s: %v", name, err)
+			return nil, fmt.Errorf("failed to create server %s: %v", serverName, err)
 		}
 
 		serverOutput := types.ProvisionServerOutput{
@@ -89,9 +120,9 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 
 		result.Servers = append(result.Servers, serverOutput)
 
-		ctx.Export(fmt.Sprintf("%s-id", name), server.ID().ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-public-ip", name), primaryIP.IpAddress.ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-private-ip", name), server.Ipv4Address.ToStringOutput())
+		ctx.Export(fmt.Sprintf("%s-id", serverName), server.ID().ToStringOutput())
+		ctx.Export(fmt.Sprintf("%s-public-ip", serverName), primaryIP.IpAddress.ToStringOutput())
+		ctx.Export(fmt.Sprintf("%s-private-ip", serverName), server.Ipv4Address.ToStringOutput())
 	}
 
 	return result, nil

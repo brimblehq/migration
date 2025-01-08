@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/types"
 )
 
@@ -40,7 +41,21 @@ func (m *SSHSetupManager) ValidateAndInitializeSSH(ctx context.Context, useTemp 
 		return m.initializeTempSSH(ctx)
 	}
 
-	return nil, nil
+	keyID, err := helpers.GenerateKeyID()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key ID: %w", err)
+	}
+
+	sshManager := &TempSSHManager{
+		db:       m.database,
+		keyID:    keyID,
+		servers:  make([]string, 0),
+		hostKeys: make(map[string][]byte),
+	}
+
+	return sshManager, nil
+
 }
 
 func (m *SSHSetupManager) initializeTempSSH(ctx context.Context) (*TempSSHManager, error) {
@@ -60,7 +75,9 @@ func (m *SSHSetupManager) initializeTempSSH(ctx context.Context) (*TempSSHManage
 		return nil, fmt.Errorf("failed to create SSH manager: %w", err)
 	}
 
-	if err := sshManager.GenerateKeys(ctx); err != nil {
+	_, err = sshManager.GenerateKeys(ctx)
+
+	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH keys: %w", err)
 	}
 

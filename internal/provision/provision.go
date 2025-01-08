@@ -3,11 +3,18 @@ package provision
 import (
 	"fmt"
 
+	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types.ProvisionServerConfig) error {
+type CloudProvisioner interface {
+	ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error)
+	ValidateConfig(config types.ProvisionServerConfig) error
+	GetProviderName() string
+}
+
+func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) error {
 	provisioner, err := GetProvisioner(provider)
 	if err != nil {
 		return err
@@ -17,7 +24,7 @@ func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types
 		return err
 	}
 
-	result, err := provisioner.ProvisionServers(ctx, *config)
+	result, err := provisioner.ProvisionServers(ctx, *config, tempSSHManager)
 	if err != nil {
 		return err
 	}
@@ -39,7 +46,7 @@ func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types
 	return nil
 }
 
-func GetProvisioner(provider string) (types.CloudProvisioner, error) {
+func GetProvisioner(provider string) (CloudProvisioner, error) {
 	switch provider {
 	case "digitalocean":
 		return &DigitalOceanProvisioner{}, nil
