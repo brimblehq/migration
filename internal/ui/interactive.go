@@ -13,8 +13,9 @@ import (
 	"github.com/manifoldco/promptui"
 )
 
-func InteractiveProvisioning(database *db.PostgresDB) (string, *types.ProvisionServerConfig, error) {
+func InteractiveProvisioning(database *db.PostgresDB, maxDevices int) (string, *types.ProvisionServerConfig, error) {
 	dbProviders, err := database.GetProviderConfigs()
+
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get provider configs: %v", err)
 	}
@@ -115,8 +116,8 @@ func InteractiveProvisioning(database *db.PostgresDB) (string, *types.ProvisionS
 		if count < 1 {
 			return errors.New("must be at least 1")
 		}
-		if count > 10 {
-			return errors.New("maximum 10 instances allowed")
+		if count > maxDevices {
+			return errors.New(fmt.Sprintf("maximum %d instances allowed", maxDevices))
 		}
 		return nil
 	}
@@ -255,7 +256,7 @@ func promptForCredentials(provider string) error {
 		if err != nil {
 			return err
 		}
-		region, err := promptSecret("Enter AWS Region (e.g., us-east-1)")
+		region, err := promptSecret("Enter AWS Region (e.g., us-east-1)", "text")
 		if err != nil {
 			return err
 		}
@@ -333,10 +334,9 @@ func promptForCredentials(provider string) error {
 	return nil
 }
 
-func promptSecret(label string) (string, error) {
+func promptSecret(label string, promptType ...string) (string, error) {
 	prompt := promptui.Prompt{
 		Label: label,
-		Mask:  '*',
 		Validate: func(s string) error {
 			if s == "" {
 				return fmt.Errorf("value cannot be empty")
@@ -344,5 +344,12 @@ func promptSecret(label string) (string, error) {
 			return nil
 		},
 	}
+
+	if len(promptType) > 0 && promptType[0] == "text" {
+		prompt.Mask = 0
+	} else {
+		prompt.Mask = '*'
+	}
+
 	return prompt.Run()
 }

@@ -72,7 +72,7 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
-	publicKey, err := tempSSHManager.GenerateKeys(context.Background())
+	publicKey, err := tempSSHManager.GenerateKeys(context.Background(), false)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)

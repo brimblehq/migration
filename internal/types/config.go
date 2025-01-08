@@ -14,6 +14,7 @@ type LicenseResponse struct {
 	Key          string               `json:"key"`
 	ExpireIn     *string              `json:"expireIn"`
 	Tag          string               `json:"tag"`
+	MaxDevices   int                  `json:"max_devices"`
 	Subscription SubscriptionResponse `json:"subscription,omitempty"`
 }
 

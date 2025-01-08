@@ -25,7 +25,7 @@ func (p *GCPProvisioner) ValidateConfig(config types.ProvisionServerConfig) erro
 }
 
 func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
-	publicKey, err := tempSSHManager.GenerateKeys(context.Background())
+	publicKey, err := tempSSHManager.GenerateKeys(context.Background(), false)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)

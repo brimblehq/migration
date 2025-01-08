@@ -2,3 +2,4 @@ executables
 dist/
 .pem
 .pulumi
+brimble-temp-*

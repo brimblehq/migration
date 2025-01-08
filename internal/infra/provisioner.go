@@ -18,8 +18,8 @@ import (
 	provisioner "github.com/brimblehq/migration/internal/provision"
 )
 
-func ProvisionInfrastructure(licenseKey string, database *db.PostgresDB, tempSSHManager *ssh.TempSSHManager) error {
-	provider, setup, err := ui.InteractiveProvisioning(database)
+func ProvisionInfrastructure(licenseKey string, maxDevices int, database *db.PostgresDB, tempSSHManager *ssh.TempSSHManager) error {
+	provider, setup, err := ui.InteractiveProvisioning(database, maxDevices)
 	if err != nil {
 		return fmt.Errorf("failed to provision servers: %v", err)
 	}

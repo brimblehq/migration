@@ -97,7 +97,7 @@ func runProvision(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := infra.ProvisionInfrastructure(licenseKey, database, sshManager); err != nil {
+	if err := infra.ProvisionInfrastructure(licenseKey, maxDevices, database, sshManager); err != nil {
 		return err
 	}
 

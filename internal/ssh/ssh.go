@@ -50,6 +50,7 @@ func (m *SSHSetupManager) ValidateAndInitializeSSH(ctx context.Context, useTemp 
 	sshManager := &TempSSHManager{
 		db:       m.database,
 		keyID:    keyID,
+		keyDir:   "~/.ssh",
 		servers:  make([]string, 0),
 		hostKeys: make(map[string][]byte),
 	}
@@ -75,7 +76,7 @@ func (m *SSHSetupManager) initializeTempSSH(ctx context.Context) (*TempSSHManage
 		return nil, fmt.Errorf("failed to create SSH manager: %w", err)
 	}
 
-	_, err = sshManager.GenerateKeys(ctx)
+	_, err = sshManager.GenerateKeys(ctx, true)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH keys: %w", err)

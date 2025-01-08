@@ -62,7 +62,7 @@ func NewTempSSHManager(db *db.PostgresDB, servers []string) (*TempSSHManager, er
 	}, nil
 }
 
-func (m *TempSSHManager) GenerateKeys(ctx context.Context) (string, error) {
+func (m *TempSSHManager) GenerateKeys(ctx context.Context, saveFile bool) (string, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate private key: %w", err)
@@ -77,22 +77,24 @@ func (m *TempSSHManager) GenerateKeys(ctx context.Context) (string, error) {
 	m.publicKey = append(m.publicKey, []byte(" "+m.keyID)...)
 	m.privateKey = privateKey
 
-	if err := m.savePrivateKey(); err != nil {
-		return "", fmt.Errorf("failed to save private key: %w", err)
-	}
-	_, err = m.db.CreateTempSSHKey(
-		ctx,
-		m.keyID,
-		string(m.publicKey),
-		m.servers,
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to register key in database: %w", err)
+	if saveFile {
+		if err := m.savePrivateKey(); err != nil {
+			return "", fmt.Errorf("failed to save private key: %w", err)
+		}
+
+		_, err = m.db.CreateTempSSHKey(
+			ctx,
+			m.keyID,
+			string(m.publicKey),
+			m.servers,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to register key in database: %w", err)
+		}
 	}
 
 	return string(m.publicKey), nil
 }
-
 func (m *TempSSHManager) ValidateKey(ctx context.Context) error {
 	key, err := m.db.GetActiveKeyByID(ctx, m.keyID)
 	if err != nil {
