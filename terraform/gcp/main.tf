@@ -16,7 +16,6 @@ provider "google" {
 # VPC Network
 resource "google_compute_network" "brimble_network" {
   name                    = "brimble-network"
-  auto_create_subnetworks = false
 }
 
 # Subnet
@@ -79,13 +78,4 @@ resource "google_compute_instance_group_manager" "brimble_instances" {
     name = "brimble"
     port = 4646
   }
-}
-
-# Output Instance Group Information
-output "instance_group_name" {
-  value = google_compute_instance_group_manager.brimble_instances.name
-}
-
-output "instance_template_name" {
-  value = google_compute_instance_template.brimble_template.name
 }

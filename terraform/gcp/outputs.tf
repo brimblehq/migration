@@ -13,3 +13,7 @@ output "firewall_name" {
 output "instance_group_name" {
   value = google_compute_instance_group_manager.brimble_instances.name
 }
+
+output "instance_template_name" {
+  value = google_compute_instance_template.brimble_template.name
+}
