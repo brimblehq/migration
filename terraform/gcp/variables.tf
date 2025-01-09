@@ -25,7 +25,8 @@ variable "machine_type" {
 variable "image" {
   description = "Source image for the instance template"
   type        = string
-  default     = "projects/debian-cloud/global/images/family/debian-11"
+  default     = "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20241219"
+  
 }
 
 variable "instance_count" {

@@ -5,11 +5,6 @@ variable "instance_count" {
 }
 
 variable "region" {
-  default     = "us-east-1"
-  description = "AWS region to deploy resources"
-}
-
-variable "region" {
   description = "AWS region to deploy resources"
   type        = string
   default     = "us-east-1"

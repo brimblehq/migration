@@ -107,6 +107,7 @@ resource "aws_instance" "brimble_instance" {
   subnet_id                   = aws_subnet.brimble_subnet.id
   vpc_security_group_ids      = [aws_security_group.brimble_sg.id]
   associate_public_ip_address = true
+  key_name = aws_key_pair.brimble-key.key_name
 
   # Root Volume (Default Storage)
   root_block_device {
