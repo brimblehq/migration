@@ -8,7 +8,6 @@ import (
 
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
-	"github.com/google/uuid"
 	"github.com/pulumi/pulumi-hcloud/sdk/go/hcloud"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -33,7 +32,7 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%s", config.Name, uuid.New().String()[:8])
+	//uniqueID := fmt.Sprintf("%s-%s", config.Name, uuid.New().String()[:8])
 
 	hcloudProvider, err := hcloud.NewProvider(ctx, "hcloud", &hcloud.ProviderArgs{
 		Token: pulumi.String(os.Getenv("HCLOUD_TOKEN")),
@@ -49,7 +48,7 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
-	sshKeyName := fmt.Sprintf("%s-key", uniqueID)
+	sshKeyName := fmt.Sprintf("%s-brimble-key", config.Reference)
 
 	sshKey, err := hcloud.NewSshKey(ctx, sshKeyName, &hcloud.SshKeyArgs{
 		Name:      pulumi.String(sshKeyName),
@@ -57,7 +56,7 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 		Labels: pulumi.StringMap{
 			"Name":     pulumi.String(sshKeyName),
 			"Provider": pulumi.String("brimble"),
-			"RunID":    pulumi.String(uniqueID),
+			"RunID":    pulumi.String(config.Reference),
 		},
 	}, pulumi.Provider(hcloudProvider))
 
@@ -66,8 +65,8 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 	}
 
 	for i := 0; i < config.Count; i++ {
-		serverName := fmt.Sprintf("%s-%d", uniqueID, i+1)
-		ipName := fmt.Sprintf("%s-ip", serverName)
+		serverName := fmt.Sprintf("%s-brimble-instance-%d", config.Reference, i+1)
+		ipName := fmt.Sprintf("%s-brimble-ip", serverName)
 
 		primaryIP, err := hcloud.NewPrimaryIp(ctx, ipName, &hcloud.PrimaryIpArgs{
 			Name:         pulumi.String(ipName),
@@ -78,7 +77,7 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 			Labels: pulumi.StringMap{
 				"Name":     pulumi.String(serverName),
 				"Provider": pulumi.String("brimble"),
-				"RunID":    pulumi.String(uniqueID),
+				"RunID":    pulumi.String(config.Reference),
 			},
 		}, pulumi.Provider(hcloudProvider))
 		if err != nil {
@@ -105,7 +104,7 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 			Labels: pulumi.StringMap{
 				"Name":     pulumi.String(serverName),
 				"Provider": pulumi.String("brimble"),
-				"RunID":    pulumi.String(uniqueID),
+				"RunID":    pulumi.String(config.Reference),
 			},
 		}, pulumi.Provider(hcloudProvider))
 		if err != nil {

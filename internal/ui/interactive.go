@@ -10,6 +10,7 @@ import (
 
 	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/types"
+	"github.com/google/uuid"
 	"github.com/manifoldco/promptui"
 )
 
@@ -144,13 +145,16 @@ func InteractiveProvisioning(database *db.PostgresDB, maxDevices int) (string, *
 		fmt.Printf("\n✅ Found %s credentials in environment\n", selectedProvider.ID)
 	}
 
+	reference := uuid.New().String()[:8]
+
 	config := &types.ProvisionServerConfig{
-		Name:   selectedMachine.ID,
-		Size:   selectedMachine.Size,
-		Region: selectedMachine.Region.Name,
-		Image:  selectedMachine.Image,
-		Count:  count,
-		Tags:   []string{"brimble", selectedMachine.Role},
+		Name:      selectedMachine.ID,
+		Size:      selectedMachine.Size,
+		Region:    selectedMachine.Region.Name,
+		Image:     selectedMachine.Image,
+		Count:     count,
+		Tags:      []string{"brimble", selectedMachine.Role},
+		Reference: reference,
 	}
 
 	fmt.Printf("\n🚀 Provisioning Summary:\n")

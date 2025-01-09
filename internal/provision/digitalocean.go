@@ -78,8 +78,8 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
-	sshKey, err := digitalocean.NewSshKey(ctx, fmt.Sprintf("%s-key", config.Name), &digitalocean.SshKeyArgs{
-		Name:      pulumi.String(fmt.Sprintf("%s-key", config.Name)),
+	sshKey, err := digitalocean.NewSshKey(ctx, fmt.Sprintf("%s-brimble-key", config.Reference), &digitalocean.SshKeyArgs{
+		Name:      pulumi.String(fmt.Sprintf("%s-brimble-key", config.Reference)),
 		PublicKey: pulumi.String(publicKey),
 	}, pulumi.Provider(digitaloceanProvider))
 
@@ -93,7 +93,7 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 	}
 
 	for i := 0; i < config.Count; i++ {
-		name := fmt.Sprintf("%s-%d", config.Name, i+1)
+		name := fmt.Sprintf("%s-brimble-instance-%d", config.Reference, i+1)
 		droplet, err := digitalocean.NewDroplet(ctx, name, &digitalocean.DropletArgs{
 			Image:  pulumi.String(config.Image),
 			Name:   pulumi.String(fmt.Sprintf("brimble-%s", name)),

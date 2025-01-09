@@ -5,13 +5,14 @@ import (
 )
 
 type ProvisionServerConfig struct {
-	Name   string
-	Size   string
-	Region string
-	Image  string
-	Tags   []string
-	Count  int
-	SSHKey string
+	Name      string
+	Size      string
+	Region    string
+	Image     string
+	Tags      []string
+	Count     int
+	SSHKey    string
+	Reference string
 }
 
 type ProvisionResult struct {
