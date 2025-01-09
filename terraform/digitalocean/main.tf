@@ -36,15 +36,16 @@ resource "digitalocean_ssh_key" "brimble_ssh_key" {
 # Create a VPC Network
 resource "digitalocean_vpc" "brimble_vpc" {
   name   = "brimble-vpc"
-  region = "nyc1" # Choose your region
+  region = var.region
 }
 
 # Create a Droplet with the SSH Key
 resource "digitalocean_droplet" "brimble_droplet" {
-  name   = "brimble-droplet"
-  region = "nyc1"          # Choose your region
-  size   = "s-2vcpu-8gb"   # 8GB RAM, 2 vCPUs
-  image  = "ubuntu-20-04-x64"  # OS image
+  for_each   = { for i in range(var.instance_count) : i => format("brimble-droplet-%02d", i) }
+  name   = each.value
+  region = var.region
+  size   = "s-2vcpu-8gb"
+  image  = "ubuntu-20-04-x64"
   vpc_uuid = digitalocean_vpc.brimble_vpc.id
 
   # Add SSH key for secure access
