@@ -1,12 +1,7 @@
 variable "instance_count" {
-    default = 2
-    description = "Number of Nomad instances to launch"
-    type        = number
-}
-
-variable "region" {
-  default     = "us-east-1"
-  description = "AWS region to deploy resources"
+  description = "Number of AWS instances to launch"
+  type        = number
+  default     = 1
 }
 
 variable "region" {
@@ -34,13 +29,13 @@ variable "availability_zone" {
 }
 
 variable "ami" {
-  description = "AMI ID for the Nomad EC2 instances"
+  description = "AMI ID for the EC2 instances"
   type        = string
   default     = "ami-0e2c8caa4b6378d8c"
 }
 
 variable "instance_type" {
-  description = "Instance type for Nomad EC2 instances"
+  description = "Instance type for EC2 instances"
   type        = string
-  default     = "t3.medium"
+  default     = "t2.large"
 }
