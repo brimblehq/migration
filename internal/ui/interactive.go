@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/types"
-	"github.com/google/uuid"
 	"github.com/manifoldco/promptui"
 )
 
@@ -117,9 +118,9 @@ func InteractiveProvisioning(database *db.PostgresDB, maxDevices int) (string, *
 		if count < 1 {
 			return errors.New("must be at least 1")
 		}
-		if count > maxDevices {
-			return errors.New(fmt.Sprintf("maximum %d instances allowed", maxDevices))
-		}
+		// if count > maxDevices {
+		// 	return errors.New(fmt.Sprintf("maximum %d instances allowed", maxDevices))
+		// }
 		return nil
 	}
 
@@ -145,18 +146,6 @@ func InteractiveProvisioning(database *db.PostgresDB, maxDevices int) (string, *
 		fmt.Printf("\n✅ Found %s credentials in environment\n", selectedProvider.ID)
 	}
 
-	reference := uuid.New().String()[:8]
-
-	config := &types.ProvisionServerConfig{
-		Name:      selectedMachine.ID,
-		Size:      selectedMachine.Size,
-		Region:    selectedMachine.Region.Name,
-		Image:     selectedMachine.Image,
-		Count:     count,
-		Tags:      []string{"brimble", selectedMachine.Role},
-		Reference: reference,
-	}
-
 	fmt.Printf("\n🚀 Provisioning Summary:\n")
 	fmt.Printf("✔ Cloud Provider: %s\n", selectedProvider.Name)
 	fmt.Printf("✔ Region: %s (%s)\n", regionOptions[regionIdx].DisplayName, selectedRegion)
@@ -165,7 +154,7 @@ func InteractiveProvisioning(database *db.PostgresDB, maxDevices int) (string, *
 	fmt.Println()
 
 	confirm := promptui.Select{
-		Label: "\nDo you want to proceed with the setup?",
+		Label: "Do you want to proceed with the setup?",
 		Items: []string{"Yes", "No"},
 		Templates: &promptui.SelectTemplates{
 			Label:    "{{ . }}",
@@ -182,6 +171,15 @@ func InteractiveProvisioning(database *db.PostgresDB, maxDevices int) (string, *
 
 	if idx == 1 {
 		return "", nil, fmt.Errorf("setup cancelled by user")
+	}
+
+	config := &types.ProvisionServerConfig{
+		Name:   selectedMachine.ID,
+		Size:   selectedMachine.Size,
+		Region: selectedMachine.Region.Name,
+		Image:  selectedMachine.Image,
+		Count:  count,
+		Tags:   []string{"brimble", selectedMachine.Role},
 	}
 
 	return selectedProvider.Name, config, nil
@@ -283,7 +281,7 @@ func promptForCredentials(provider string) error {
 
 		prompt := promptui.Select{
 			Label: "Select credential type",
-			Items: []string{"File Path", "JSON Content", "Base64 Encoded"},
+			Items: []string{"File Path", "JSON Content", "Base64 Encoded (Recommended)"},
 		}
 
 		idx, _, err := prompt.Run()
@@ -294,7 +292,7 @@ func promptForCredentials(provider string) error {
 		var creds string
 		switch idx {
 		case 0:
-			creds, err = promptSecret("Enter path to service account JSON file")
+			creds, err = promptSecret("Enter path to service account JSON file", "text")
 			if err != nil {
 				return err
 			}
@@ -315,7 +313,7 @@ func promptForCredentials(provider string) error {
 			}
 			creds = tmpFile.Name()
 		case 2:
-			base64Creds, err := promptSecret("Enter base64 encoded service account JSON")
+			base64Creds, err := helpers.ReadBase64Input("Enter base64 encoded service account JSON:")
 			if err != nil {
 				return err
 			}
@@ -323,6 +321,12 @@ func promptForCredentials(provider string) error {
 			if err != nil {
 				return fmt.Errorf("invalid base64 encoding: %v", err)
 			}
+
+			var jsonCheck map[string]interface{}
+			if err := json.Unmarshal(decoded, &jsonCheck); err != nil {
+				return fmt.Errorf("decoded content is not valid JSON: %v", err)
+			}
+
 			tmpFile, err := os.CreateTemp("", "gcp-creds-*.json")
 			if err != nil {
 				return err
@@ -332,7 +336,14 @@ func promptForCredentials(provider string) error {
 			}
 			creds = tmpFile.Name()
 		}
+
+		projectID, err := promptSecret("Enter GCP Project ID", "text")
+		if err != nil {
+			return err
+		}
+
 		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", creds)
+		os.Setenv("GOOGLE_CLOUD_PROJECT", projectID)
 	}
 
 	return nil
@@ -349,8 +360,24 @@ func promptSecret(label string, promptType ...string) (string, error) {
 		},
 	}
 
-	if len(promptType) > 0 && promptType[0] == "text" {
-		prompt.Mask = 0
+	if len(promptType) > 0 {
+		switch promptType[0] {
+		case "text":
+			prompt.Mask = 0
+		case "base64":
+			prompt.Mask = 0
+			prompt.HideEntered = true
+			prompt.IsVimMode = true
+			prompt.Validate = func(s string) error {
+				if s == "" {
+					return fmt.Errorf("value cannot be empty")
+				}
+				fmt.Printf("\r\033[K✓ Base64 content received successfully\n")
+				return nil
+			}
+		default:
+			prompt.Mask = '*'
+		}
 	} else {
 		prompt.Mask = '*'
 	}

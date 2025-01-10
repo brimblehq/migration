@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/brimblehq/migration/internal/auth"
@@ -18,6 +20,7 @@ import (
 	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/infra"
 	"github.com/brimblehq/migration/internal/manager"
+	"github.com/brimblehq/migration/internal/notification"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	infisical "github.com/infisical/go-sdk"
@@ -37,15 +40,16 @@ var (
 	rootCmd = &cobra.Command{
 		Use:   "runner",
 		Short: "Infrastructure setup and management tool",
-		Long: `A CLI tool for infrastructure setup and management,
-including server provisioning and configuration.`,
-		RunE: runSetup,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Name() != "help" && licenseKey == "" {
-				return fmt.Errorf("license key is required")
-			}
-			return nil
+		Long:  `Brimble cli tool for infrastructure setup and management, including server provisioning and configuration.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
 		},
+	}
+
+	setupCmd = &cobra.Command{
+		Use:   "setup",
+		Short: "Run infrastructure setup",
+		RunE:  runSetup,
 	}
 
 	provisionCmd = &cobra.Command{
@@ -53,11 +57,16 @@ including server provisioning and configuration.`,
 		Short: "Provision infrastructure",
 		RunE:  runProvision,
 	}
+
+	initCmd = &cobra.Command{
+		Use:   "init",
+		Short: "Initialize runner configuration",
+		RunE:  runInit,
+	}
 )
 
 func Execute() {
 	c := make(chan os.Signal, 1)
-
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
@@ -65,7 +74,9 @@ func Execute() {
 	}()
 
 	rootCmd.SilenceErrors = false
-	rootCmd.SilenceUsage = true
+	rootCmd.SilenceUsage = false
+
+	template.New("help").Parse(`{{.Long | trimTrailingWhitespaces}}{{if or .Runnable .HasSubCommands}}{{.UsageString | trimTrailingWhitespaces}}{{end}}`)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -73,17 +84,68 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&licenseKey, "license-key", "", "License key for runner")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./config.json", "Path to config file")
+
 	rootCmd.PersistentFlags().BoolVar(&useTemp, "use-temp", false, "Use temporary SSH key")
 
-	rootCmd.MarkPersistentFlagRequired("license-key")
+	rootCmd.PersistentFlags().StringVar(&licenseKey, "license-key", "", "License key for runner (optional)")
 
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if cmd.Name() == "init" || cmd.Name() == "help" {
+			return nil
+		}
+
+		if licenseKey == "" {
+			var err error
+			licenseKey, err = auth.LoadLicenseKey()
+			if err != nil {
+				return err
+			}
+			if licenseKey == "" {
+				return fmt.Errorf("license key not found. Please run 'runner init' to configure your license key")
+			}
+		}
+		return nil
+	}
+
+	rootCmd.AddCommand(setupCmd)
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(provisionCmd)
 }
 
+func runInit(cmd *cobra.Command, args []string) error {
+	fmt.Print("Please enter your license key: ")
+
+	reader := bufio.NewReader(os.Stdin)
+
+	licenseKey, err := reader.ReadString('\n')
+
+	if err != nil {
+		return fmt.Errorf("failed to read license key: %v", err)
+	}
+
+	licenseKey = strings.TrimSpace(licenseKey)
+
+	_, _, _, err = core.GetSetupConfigurations(licenseKey)
+
+	if err != nil {
+		return fmt.Errorf("invalid license key: %v", err)
+	}
+
+	if err := auth.SaveLicenseKey(licenseKey); err != nil {
+		return err
+	}
+
+	fmt.Println("License key successfully saved!")
+
+	return nil
+}
+
 func runProvision(cmd *cobra.Command, args []string) error {
+	notifier := notification.New()
+
 	database, _, _, maxDevices, err := setupInitialServices()
+
 	if err != nil {
 		return fmt.Errorf("failed to setup initial services: %v", err)
 	}
@@ -93,11 +155,12 @@ func runProvision(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	sshManager, err := setupSSHManager(ctx, database, maxDevices)
+
 	if err != nil {
 		return err
 	}
 
-	if err := infra.ProvisionInfrastructure(licenseKey, maxDevices, database, sshManager); err != nil {
+	if err := infra.ProvisionInfrastructure(licenseKey, maxDevices, database, sshManager, notifier); err != nil {
 		return err
 	}
 
@@ -105,7 +168,7 @@ func runProvision(cmd *cobra.Command, args []string) error {
 }
 
 func runSetup(cmd *cobra.Command, args []string) error {
-	os.Stdout.WriteString("Starting setup\n")
+	notifier := notification.New()
 
 	configFile, err := os.ReadFile(configPath)
 	if err != nil {
@@ -131,16 +194,22 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := setupServers(ctx, &config, database, sshManager, decryptedTailScale); err != nil {
+	if err := setupServers(ctx, &config, database, sshManager, decryptedTailScale, notifier); err != nil {
 		return err
 	}
 
 	log.Println("Infrastructure setup completed ✅")
+
+	err = notifier.Send("Installation Complete", "Brimble is now ready to use !")
+
+	if err != nil {
+		log.Printf("Failed to send notification: %v", err)
+	}
 	return nil
 }
 
 func setupInitialServices() (*db.PostgresDB, infisical.InfisicalClientInterface, string, int, error) {
-	dbUrl, tailScaleToken, maxDevices, err := core.GetDatabaseUrl(licenseKey)
+	dbUrl, tailScaleToken, maxDevices, err := core.GetSetupConfigurations(licenseKey)
 	if err != nil {
 		return nil, nil, "", 0, fmt.Errorf("failed to get database URL: %v", err)
 	}
@@ -175,7 +244,7 @@ func setupInitialServices() (*db.PostgresDB, infisical.InfisicalClientInterface,
 }
 
 func setupServers(ctx context.Context, config *types.Config, database *db.PostgresDB,
-	sshManager *ssh.TempSSHManager, decryptedTailScale string) error {
+	sshManager *ssh.TempSSHManager, decryptedTailScale string, notifier *notification.DefaultNotifier) error {
 
 	servers := helpers.GetServerList(database, *config)
 
@@ -196,7 +265,7 @@ func setupServers(ctx context.Context, config *types.Config, database *db.Postgr
 			defer func() { <-semaphore }()
 
 			if err := processServer(ctx, server, sshManager, config, database,
-				decryptedTailScale, clusterRoles, errorChan); err != nil {
+				decryptedTailScale, clusterRoles, errorChan, notifier); err != nil {
 				errorChan <- err
 			}
 		}(server)
@@ -210,7 +279,7 @@ func setupServers(ctx context.Context, config *types.Config, database *db.Postgr
 
 func processServer(ctx context.Context, server types.Server, sshManager *ssh.TempSSHManager,
 	config *types.Config, database *db.PostgresDB, decryptedTailScale string,
-	clusterRoles *manager.ClusterManager, errorChan chan error) error {
+	clusterRoles *manager.ClusterManager, errorChan chan error, notifier *notification.DefaultNotifier) error {
 
 	client, err := ssh.HandleServerAuth(server, sshManager, useTemp)
 	if err != nil {
@@ -235,7 +304,7 @@ func processServer(ctx context.Context, server types.Server, sshManager *ssh.Tem
 	}
 
 	manager.SetupServer(ctx, setup, config, sshManager, useTemp, decryptedTailScale,
-		database, licenseKey, clusterRoles, errorChan)
+		database, licenseKey, clusterRoles, errorChan, notifier)
 
 	return nil
 }

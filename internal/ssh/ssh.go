@@ -76,7 +76,7 @@ func (m *SSHSetupManager) initializeTempSSH(ctx context.Context) (*TempSSHManage
 		return nil, fmt.Errorf("failed to create SSH manager: %w", err)
 	}
 
-	_, err = sshManager.GenerateKeys(ctx, true)
+	_, _, err = sshManager.GenerateKeys(ctx)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SSH keys: %w", err)

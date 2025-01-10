@@ -3,7 +3,11 @@ package provision
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
+	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi-gcp/sdk/v6/go/gcp"
@@ -24,15 +28,16 @@ func (p *GCPProvisioner) ValidateConfig(config types.ProvisionServerConfig) erro
 	return nil
 }
 
-func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
-	publicKey, err := tempSSHManager.GenerateKeys(context.Background(), false)
+func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager, database *db.PostgresDB) (*types.ProvisionResult, error) {
+	publicKey, keyPath, err := tempSSHManager.GenerateKeys(context.Background())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
 	gcpProvider, err := gcp.NewProvider(ctx, "gcp", &gcp.ProviderArgs{
-		Credentials: pulumi.String(""),
+		Credentials: pulumi.String(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")),
+		Project:     pulumi.String(os.Getenv("GOOGLE_CLOUD_PROJECT")),
 		Region:      pulumi.String(config.Region),
 	})
 
@@ -46,52 +51,104 @@ func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
-	network, err := compute.NewNetwork(ctx, fmt.Sprintf("%s-brimble-network", config.Reference), &compute.NetworkArgs{
-		Name:                  pulumi.String(fmt.Sprintf("%s-brimble-network", config.Reference)),
-		AutoCreateSubnetworks: pulumi.Bool(false),
-	}, pulumi.Provider(gcpProvider))
+	networkName := "network-brimble"
+
+	network, err := compute.NewNetwork(ctx, networkName, &compute.NetworkArgs{
+		Name:                  pulumi.String(networkName),
+		AutoCreateSubnetworks: pulumi.Bool(true),
+	}, pulumi.Provider(gcpProvider), pulumi.ReplaceOnChanges([]string{
+		"Name", "AutoCreateSubnetworks",
+	}))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network: %v", err)
 	}
 
-	subnet, err := compute.NewSubnetwork(ctx, fmt.Sprintf("%s-brimble-subnet", config.Reference), &compute.SubnetworkArgs{
-		Name:        pulumi.String(fmt.Sprintf("%s-brimble-subnet", config.Reference)),
-		IpCidrRange: pulumi.String("10.0.1.0/24"),
-		Network:     network.ID(),
-		Region:      pulumi.String(config.Region),
-	}, pulumi.Provider(gcpProvider))
+	_, err = compute.NewFirewall(ctx, "icmp-fw-in-brimble", &compute.FirewallArgs{
+		Network: network.ID(),
+		Allows: compute.FirewallAllowArray{
+			&compute.FirewallAllowArgs{
+				Protocol: pulumi.String("icmp"),
+			},
+		},
+		Direction:    pulumi.String("INGRESS"),
+		Priority:     pulumi.Int(65534),
+		SourceRanges: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to create subnet: %v", err)
+		return nil, fmt.Errorf("failed to create icmp firewall rule: %v", err)
 	}
 
-	_, err = compute.NewFirewall(ctx, fmt.Sprintf("%s-brimble-firewall", config.Reference), &compute.FirewallArgs{
-		Network: network.SelfLink,
+	_, err = compute.NewFirewall(ctx, "internal-fw-in-brimble", &compute.FirewallArgs{
+		Network: network.ID(),
 		Allows: compute.FirewallAllowArray{
 			&compute.FirewallAllowArgs{
 				Protocol: pulumi.String("tcp"),
-				Ports: pulumi.StringArray{
-					pulumi.String("22"),
-				},
+				Ports:    pulumi.StringArray{pulumi.String("0-65535")},
+			},
+			&compute.FirewallAllowArgs{
+				Protocol: pulumi.String("udp"),
+				Ports:    pulumi.StringArray{pulumi.String("0-65535")},
+			},
+			&compute.FirewallAllowArgs{
+				Protocol: pulumi.String("icmp"),
 			},
 		},
-		SourceRanges: pulumi.StringArray{
-			pulumi.String("0.0.0.0/0"),
-		},
-		TargetTags: pulumi.StringArray{
-			pulumi.String(fmt.Sprintf("%s-brimble-server", config.Reference)),
-		},
-	}, pulumi.Provider(gcpProvider))
+		Direction:    pulumi.String("INGRESS"),
+		Priority:     pulumi.Int(65534),
+		SourceRanges: pulumi.StringArray{pulumi.String("10.128.0.0/9")},
+	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create firewall rules: %v", err)
+		return nil, fmt.Errorf("failed to create internal firewall rule: %v", err)
+	}
+
+	_, err = compute.NewFirewall(ctx, "rdp-fw-in-brimble", &compute.FirewallArgs{
+		Network: network.ID(),
+		Allows: compute.FirewallAllowArray{
+			&compute.FirewallAllowArgs{
+				Protocol: pulumi.String("tcp"),
+				Ports:    pulumi.StringArray{pulumi.String("3389")},
+			},
+		},
+		Direction:    pulumi.String("INGRESS"),
+		Priority:     pulumi.Int(65534),
+		SourceRanges: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RDP firewall rule: %v", err)
+	}
+
+	_, err = compute.NewFirewall(ctx, "ssh-fw-in-brimble", &compute.FirewallArgs{
+		Network: network.ID(),
+		Allows: compute.FirewallAllowArray{
+			&compute.FirewallAllowArgs{
+				Protocol: pulumi.String("tcp"),
+				Ports:    pulumi.StringArray{pulumi.String("22")},
+			},
+		},
+		Direction:    pulumi.String("INGRESS"),
+		Priority:     pulumi.Int(65534),
+		SourceRanges: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SSH firewall rule: %v", err)
 	}
 
 	for i := 0; i < config.Count; i++ {
-		name := fmt.Sprintf("%s-brimble-instance-%d", config.Reference, i+1)
+		reference, err := helpers.GenerateUniqueReference(database)
 
-		staticIP, err := compute.NewAddress(ctx, fmt.Sprintf("%s-ip", name), &compute.AddressArgs{
-			Name:   pulumi.String(fmt.Sprintf("%s-ip", name)),
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate unique reference: %v", err)
+		}
+
+		name := fmt.Sprintf("instance-%s-brimble-%d", strings.ToLower(reference), i+1)
+
+		staticIP, err := compute.NewAddress(ctx, fmt.Sprintf("ip-%s-ext-%d", name, i+1), &compute.AddressArgs{
+			Name:   pulumi.String(fmt.Sprintf("ip-%s-ext-%d", name, i+1)),
 			Region: pulumi.String(config.Region),
 		}, pulumi.Provider(gcpProvider))
 
@@ -99,24 +156,12 @@ func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 			return nil, fmt.Errorf("failed to create static IP for %s: %v", name, err)
 		}
 
-		internalIP, err := compute.NewAddress(ctx, fmt.Sprintf("%s-brimble-internal-ip", name), &compute.AddressArgs{
-			Name:        pulumi.String(fmt.Sprintf("%s-brimble-internal-ip", name)),
-			Subnetwork:  subnet.ID(),
-			AddressType: pulumi.String("INTERNAL"),
-			Region:      pulumi.String(config.Region),
-			Purpose:     pulumi.String("GCE_ENDPOINT"),
-		}, pulumi.Provider(gcpProvider))
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to create internal IP for %s: %v", name, err)
-		}
-
 		sshMetadata := fmt.Sprintf("#!/bin/bash\necho '%s' >> /root/.ssh/authorized_keys", publicKey)
 
 		instance, err := compute.NewInstance(ctx, name, &compute.InstanceArgs{
 			Name:        pulumi.String(name),
 			MachineType: pulumi.String(config.Size),
-			Zone:        pulumi.String(fmt.Sprintf("%s-a", config.Region)), // e.g., us-central1-a
+			Zone:        pulumi.String(fmt.Sprintf("%s-a", config.Region)),
 			BootDisk: &compute.InstanceBootDiskArgs{
 				InitializeParams: &compute.InstanceBootDiskInitializeParamsArgs{
 					Image: pulumi.String(config.Image),
@@ -124,9 +169,7 @@ func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 			},
 			NetworkInterfaces: compute.InstanceNetworkInterfaceArray{
 				&compute.InstanceNetworkInterfaceArgs{
-					Network:    network.ID(),
-					Subnetwork: subnet.ID(),
-					NetworkIp:  internalIP.Address,
+					Network: network.ID(),
 					AccessConfigs: compute.InstanceNetworkInterfaceAccessConfigArray{
 						&compute.InstanceNetworkInterfaceAccessConfigArgs{
 							NatIp: staticIP.Address,
@@ -135,11 +178,15 @@ func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 				},
 			},
 			Tags: pulumi.StringArray{
-				pulumi.String(fmt.Sprintf("%s-brimble-server", config.Reference)),
+				pulumi.String(tagName),
 			},
 			Labels: pulumi.StringMap{
 				"name":     pulumi.String(name),
 				"provider": pulumi.String("brimble"),
+			},
+			Metadata: pulumi.StringMap{
+				"enable-oslogin": pulumi.String("false"),
+				"ssh-keys":       pulumi.String(fmt.Sprintf("root:%s", publicKey)),
 			},
 			MetadataStartupScript: pulumi.StringPtrInput(pulumi.String(sshMetadata)),
 			ServiceAccount: &compute.InstanceServiceAccountArgs{
@@ -147,23 +194,20 @@ func (p *GCPProvisioner) ProvisionServers(ctx *pulumi.Context, config types.Prov
 					pulumi.String("cloud-platform"),
 				},
 			},
-		}, pulumi.Provider(gcpProvider))
+		}, pulumi.Provider(gcpProvider), pulumi.IgnoreChanges([]string{"name"}), pulumi.RetainOnDelete(true))
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create instance %s: %v", name, err)
 		}
 
 		serverOutput := types.ProvisionServerOutput{
-			ID:        instance.ID().ToStringOutput(),
-			PublicIP:  staticIP.Address.ToStringOutput(),
-			PrivateIP: internalIP.Address.ToStringOutput(),
+			ID:               instance.ID().ToStringOutput(),
+			PublicIP:         staticIP.Address.ToStringOutput(),
+			PrivateIP:        staticIP.Address.ToStringOutput(),
+			ProvisionKeyPath: keyPath,
 		}
 
 		result.Servers = append(result.Servers, serverOutput)
-
-		ctx.Export(fmt.Sprintf("%s-id", name), instance.ID().ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-public-ip", name), staticIP.Address.ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-private-ip", name), internalIP.Address.ToStringOutput())
 	}
 
 	return result, nil

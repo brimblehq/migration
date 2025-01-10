@@ -5,14 +5,13 @@ import (
 )
 
 type ProvisionServerConfig struct {
-	Name      string
-	Size      string
-	Region    string
-	Image     string
-	Tags      []string
-	Count     int
-	SSHKey    string
-	Reference string
+	Name   string
+	Size   string
+	Region string
+	Image  string
+	Tags   []string
+	Count  int
+	SSHKey string
 }
 
 type ProvisionResult struct {
@@ -25,9 +24,10 @@ type ProvisionResult struct {
 }
 
 type ProvisionServerOutput struct {
-	ID        pulumi.StringOutput
-	PublicIP  pulumi.StringOutput
-	PrivateIP pulumi.StringOutput
+	ID               pulumi.StringOutput
+	PublicIP         pulumi.StringOutput
+	PrivateIP        pulumi.StringOutput
+	ProvisionKeyPath string
 }
 
 type Provider struct {

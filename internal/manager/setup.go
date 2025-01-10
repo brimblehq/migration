@@ -8,6 +8,7 @@ import (
 
 	"github.com/brimblehq/migration/internal/core"
 	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/notification"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/brimblehq/migration/internal/ui"
@@ -22,7 +23,7 @@ type ServerSetup struct {
 
 func SetupServer(ctx context.Context, setup ServerSetup, config *types.Config, tempSSHManager *ssh.TempSSHManager, useTemp bool,
 	decryptedTailScaleValue string, database *db.PostgresDB, licenseKey string,
-	clusterRoles *ClusterManager, errorChan chan<- error) {
+	clusterRoles *ClusterManager, errorChan chan<- error, notifier *notification.DefaultNotifier) {
 
 	terminalOutput := ui.NewTerminalOutput(setup.Server.Host)
 	spinner := ui.NewStepSpinner(setup.Server.Host, terminalOutput)
@@ -37,7 +38,7 @@ func SetupServer(ctx context.Context, setup ServerSetup, config *types.Config, t
 	}()
 
 	spinner.Start("Validating license")
-	licenseResp, err := core.ValidateLicenseKey(licenseKey, strings.TrimSpace(setup.MachineID), strings.TrimSpace(setup.Hostname))
+	licenseResp, err := core.ValidateOrRegisterMachineLicenseKey(licenseKey, strings.TrimSpace(setup.MachineID), strings.TrimSpace(setup.Hostname))
 	if err != nil || !licenseResp.Valid {
 		spinner.Stop(false)
 		errorChan <- fmt.Errorf("invalid license for server (%s)", setup.Server.Host)
@@ -61,7 +62,7 @@ func SetupServer(ctx context.Context, setup ServerSetup, config *types.Config, t
 	}
 
 	im := NewInstallationManager(setup.Client, setup.Server, roles, config, decryptedTailScaleValue, database, licenseResp)
-	if err := executeInstallationSteps(ctx, im, currentStep, setup.MachineID, database, spinner, licenseKey, config.ClusterConfig.Runner.Instance); err != nil {
+	if err := executeInstallationSteps(ctx, im, currentStep, setup.MachineID, database, spinner, licenseKey, config.ClusterConfig.Runner.Instance, notifier); err != nil {
 		errorChan <- err
 		return
 	}
@@ -84,7 +85,7 @@ func handleServerRegistration(machineID string, server types.Server, roles []typ
 }
 
 func executeInstallationSteps(ctx context.Context, im *InstallationManager, currentStep types.ServerStep,
-	machineID string, database *db.PostgresDB, spinner *ui.StepSpinner, licenseKey string, instances int) error {
+	machineID string, database *db.PostgresDB, spinner *ui.StepSpinner, licenseKey string, instances int, notifier *notification.DefaultNotifier) error {
 
 	steps := []struct {
 		name    string
@@ -125,6 +126,9 @@ func executeInstallationSteps(ctx context.Context, im *InstallationManager, curr
 				spinner.Start(step.name)
 				if err := step.fn(); err != nil {
 					spinner.Stop(false)
+					if notifier != nil {
+						_ = notifier.Send("Installation Error", fmt.Sprintf("Error during %s on %s: %v", step.name, im.server.Host, err))
+					}
 					return fmt.Errorf("error during (%s): %v", step.name, err)
 				}
 				if err := database.UpdateServerStep(machineID, step.step); err != nil {
@@ -134,6 +138,12 @@ func executeInstallationSteps(ctx context.Context, im *InstallationManager, curr
 				currentStep = step.step
 				currentStepOrder = stepOrder[currentStep]
 				spinner.Stop(true)
+				if notifier != nil {
+					_ = notifier.Send(
+						"Installation Progress",
+						fmt.Sprintf("Completed %s on %s", step.name, im.server.Host),
+					)
+				}
 			}
 		}
 	}

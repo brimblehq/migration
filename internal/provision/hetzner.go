@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi-hcloud/sdk/go/hcloud"
@@ -25,14 +27,12 @@ func (p *HetznerProvisioner) ValidateConfig(config types.ProvisionServerConfig) 
 	return nil
 }
 
-func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
-	publicKey, err := tempSSHManager.GenerateKeys(context.Background(), false)
+func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager, database *db.PostgresDB) (*types.ProvisionResult, error) {
+	publicKey, keyPath, err := tempSSHManager.GenerateKeys(context.Background())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
-
-	//uniqueID := fmt.Sprintf("%s-%s", config.Name, uuid.New().String()[:8])
 
 	hcloudProvider, err := hcloud.NewProvider(ctx, "hcloud", &hcloud.ProviderArgs{
 		Token: pulumi.String(os.Getenv("HCLOUD_TOKEN")),
@@ -48,15 +48,14 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
-	sshKeyName := fmt.Sprintf("%s-brimble-key", config.Reference)
+	sshKeyName := "brimble-ssh-key"
 
 	sshKey, err := hcloud.NewSshKey(ctx, sshKeyName, &hcloud.SshKeyArgs{
-		Name:      pulumi.String(sshKeyName),
+		Name:      pulumi.String("brimble-key"),
 		PublicKey: pulumi.String(publicKey),
 		Labels: pulumi.StringMap{
 			"Name":     pulumi.String(sshKeyName),
 			"Provider": pulumi.String("brimble"),
-			"RunID":    pulumi.String(config.Reference),
 		},
 	}, pulumi.Provider(hcloudProvider))
 
@@ -65,7 +64,14 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 	}
 
 	for i := 0; i < config.Count; i++ {
-		serverName := fmt.Sprintf("%s-brimble-instance-%d", config.Reference, i+1)
+		reference, err := helpers.GenerateUniqueReference(database)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate unique reference: %v", err)
+		}
+
+		serverName := fmt.Sprintf("%s-brimble-instance-%d", reference, i+1)
+
 		ipName := fmt.Sprintf("%s-brimble-ip", serverName)
 
 		primaryIP, err := hcloud.NewPrimaryIp(ctx, ipName, &hcloud.PrimaryIpArgs{
@@ -77,7 +83,7 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 			Labels: pulumi.StringMap{
 				"Name":     pulumi.String(serverName),
 				"Provider": pulumi.String("brimble"),
-				"RunID":    pulumi.String(config.Reference),
+				"RunID":    pulumi.String(reference),
 			},
 		}, pulumi.Provider(hcloudProvider))
 		if err != nil {
@@ -104,24 +110,21 @@ func (p *HetznerProvisioner) ProvisionServers(ctx *pulumi.Context, config types.
 			Labels: pulumi.StringMap{
 				"Name":     pulumi.String(serverName),
 				"Provider": pulumi.String("brimble"),
-				"RunID":    pulumi.String(config.Reference),
+				"RunID":    pulumi.String(reference),
 			},
-		}, pulumi.Provider(hcloudProvider))
+		}, pulumi.Provider(hcloudProvider), pulumi.RetainOnDelete(true))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create server %s: %v", serverName, err)
 		}
 
 		serverOutput := types.ProvisionServerOutput{
-			ID:        server.ID().ToStringOutput(),
-			PublicIP:  primaryIP.IpAddress.ToStringOutput(),
-			PrivateIP: server.Ipv4Address.ToStringOutput(),
+			ID:               server.ID().ToStringOutput(),
+			PublicIP:         primaryIP.IpAddress.ToStringOutput(),
+			PrivateIP:        server.Ipv4Address.ToStringOutput(),
+			ProvisionKeyPath: keyPath,
 		}
 
 		result.Servers = append(result.Servers, serverOutput)
-
-		ctx.Export(fmt.Sprintf("%s-id", serverName), server.ID().ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-public-ip", serverName), primaryIP.IpAddress.ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-private-ip", serverName), server.Ipv4Address.ToStringOutput())
 	}
 
 	return result, nil

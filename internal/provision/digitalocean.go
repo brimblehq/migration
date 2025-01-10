@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/brimblehq/migration/internal/db"
+	"github.com/brimblehq/migration/internal/helpers"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi-digitalocean/sdk/v4/go/digitalocean"
@@ -36,6 +38,7 @@ func (p *DigitalOceanProvisioner) getOrCreateVPC(ctx *pulumi.Context, vpcName, r
 			IpRange: pulumi.String(existingVPC.IpRange),
 		},
 			pulumi.Provider(provider),
+			pulumi.RetainOnDelete(true),
 			pulumi.Import(pulumi.ID(existingVPC.Id)))
 
 		if err != nil {
@@ -57,7 +60,7 @@ func (p *DigitalOceanProvisioner) getOrCreateVPC(ctx *pulumi.Context, vpcName, r
 	return vpc, nil
 }
 
-func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error) {
+func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager, database *db.PostgresDB) (*types.ProvisionResult, error) {
 	digitaloceanProvider, err := digitalocean.NewProvider(ctx, "digitalocean", &digitalocean.ProviderArgs{
 		Token: pulumi.String(os.Getenv("DIGITALOCEAN_ACCESS_TOKEN")),
 	})
@@ -72,14 +75,14 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 		Servers:  make([]types.ProvisionServerOutput, 0),
 	}
 
-	publicKey, err := tempSSHManager.GenerateKeys(context.Background(), false)
+	publicKey, keyPath, err := tempSSHManager.GenerateKeys(context.Background())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate keys: %v", err)
 	}
 
-	sshKey, err := digitalocean.NewSshKey(ctx, fmt.Sprintf("%s-brimble-key", config.Reference), &digitalocean.SshKeyArgs{
-		Name:      pulumi.String(fmt.Sprintf("%s-brimble-key", config.Reference)),
+	sshKey, err := digitalocean.NewSshKey(ctx, sshKeyName, &digitalocean.SshKeyArgs{
+		Name:      pulumi.String(sshKeyName),
 		PublicKey: pulumi.String(publicKey),
 	}, pulumi.Provider(digitaloceanProvider))
 
@@ -87,16 +90,23 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 		return nil, fmt.Errorf("failed to create SSH key: %v", err)
 	}
 
-	vpc, err := p.getOrCreateVPC(ctx, "brimble-network", config.Region, digitaloceanProvider)
+	vpc, err := p.getOrCreateVPC(ctx, networkName, config.Region, digitaloceanProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create vpc: %v", err)
 	}
 
 	for i := 0; i < config.Count; i++ {
-		name := fmt.Sprintf("%s-brimble-instance-%d", config.Reference, i+1)
+		reference, err := helpers.GenerateUniqueReference(database)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate unique reference: %v", err)
+		}
+
+		name := fmt.Sprintf("brimble-instance-%s-%d", reference, i+1)
+
 		droplet, err := digitalocean.NewDroplet(ctx, name, &digitalocean.DropletArgs{
 			Image:  pulumi.String(config.Image),
-			Name:   pulumi.String(fmt.Sprintf("brimble-%s", name)),
+			Name:   pulumi.String(name),
 			Region: pulumi.String(config.Region),
 			Size:   pulumi.String(digitalocean.DropletSlugDropletS1VCPU1GB),
 			SshKeys: pulumi.StringArray{
@@ -106,23 +116,20 @@ func (p *DigitalOceanProvisioner) ProvisionServers(ctx *pulumi.Context, config t
 				pulumi.String("brimble"),
 			},
 			VpcUuid: vpc.ID(),
-		}, pulumi.Provider(digitaloceanProvider))
+		}, pulumi.Provider(digitaloceanProvider), pulumi.RetainOnDelete(true))
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create droplet %s: %v", name, err)
 		}
 
 		serverOutput := types.ProvisionServerOutput{
-			ID:        droplet.ID().ToStringOutput(),
-			PublicIP:  droplet.Ipv4Address.ToStringOutput(),
-			PrivateIP: droplet.Ipv4AddressPrivate.ToStringOutput(),
+			ID:               droplet.ID().ToStringOutput(),
+			PublicIP:         droplet.Ipv4Address.ToStringOutput(),
+			PrivateIP:        droplet.Ipv4AddressPrivate.ToStringOutput(),
+			ProvisionKeyPath: keyPath,
 		}
 
 		result.Servers = append(result.Servers, serverOutput)
-
-		ctx.Export(fmt.Sprintf("%s-id", name), droplet.ID().ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-public-ip", name), droplet.Ipv4Address.ToStringOutput())
-		ctx.Export(fmt.Sprintf("%s-private-ip", name), droplet.Ipv4AddressPrivate.ToStringOutput())
 	}
 
 	return result, nil

@@ -4,11 +4,6 @@ import (
 	"time"
 )
 
-type Config struct {
-	Servers       []Server      `json:"servers"`
-	ClusterConfig ClusterConfig `json:"cluster_config"`
-}
-
 type LicenseResponse struct {
 	Valid        bool                 `json:"valid"`
 	Key          string               `json:"key"`
@@ -41,6 +36,11 @@ type FlagConfig struct {
 	ConfigPath string
 	UseTemp    bool
 	Provision  bool
+}
+
+type Config struct {
+	Servers       []Server      `json:"servers"`
+	ClusterConfig ClusterConfig `json:"cluster_config"`
 }
 
 type Server struct {
@@ -83,4 +83,9 @@ type Docker struct {
 type Runner struct {
 	Port     int `json:"port"`
 	Instance int `json:"instance"`
+}
+
+type IPConfig struct {
+	PublicIP  string `json:"publicIp"`
+	PrivateIP string `json:"privateIp"`
 }

@@ -62,38 +62,43 @@ func NewTempSSHManager(db *db.PostgresDB, servers []string) (*TempSSHManager, er
 	}, nil
 }
 
-func (m *TempSSHManager) GenerateKeys(ctx context.Context, saveFile bool) (string, error) {
+func (m *TempSSHManager) GenerateKeys(ctx context.Context, reference ...string) (string, string, error) {
+	identifier := m.keyID
+	if len(reference) > 0 && reference[0] != "" {
+		identifier = reference[0]
+	}
+
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate private key: %w", err)
+		return "", "", fmt.Errorf("failed to generate private key: %w", err)
 	}
 
 	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate public key: %w", err)
+		return "", "", fmt.Errorf("failed to generate public key: %w", err)
 	}
 
 	m.publicKey = bytes.TrimSpace(ssh.MarshalAuthorizedKey(publicKey))
-	m.publicKey = append(m.publicKey, []byte(" "+m.keyID)...)
+	m.publicKey = append(m.publicKey, []byte(" "+identifier)...)
 	m.privateKey = privateKey
 
-	if saveFile {
-		if err := m.savePrivateKey(); err != nil {
-			return "", fmt.Errorf("failed to save private key: %w", err)
-		}
-
-		_, err = m.db.CreateTempSSHKey(
-			ctx,
-			m.keyID,
-			string(m.publicKey),
-			m.servers,
-		)
-		if err != nil {
-			return "", fmt.Errorf("failed to register key in database: %w", err)
-		}
+	keyPath, err := m.savePrivateKey()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to save private key: %w", err)
 	}
 
-	return string(m.publicKey), nil
+	_, err = m.db.CreateTempSSHKey(
+		ctx,
+		identifier,
+		string(m.publicKey),
+		m.servers,
+	)
+
+	if err != nil {
+		return "", "", fmt.Errorf("failed to register key in database: %w", err)
+	}
+
+	return string(m.publicKey), keyPath, nil
 }
 func (m *TempSSHManager) ValidateKey(ctx context.Context) error {
 	key, err := m.db.GetActiveKeyByID(ctx, m.keyID)
@@ -209,18 +214,28 @@ func (m *TempSSHManager) Cleanup(ctx context.Context, client *SSHClient) error {
 	return nil
 }
 
-func (m *TempSSHManager) savePrivateKey() error {
+func (m *TempSSHManager) savePrivateKey() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	sshDir := filepath.Join(homeDir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create .ssh directory: %w", err)
+	}
+
 	privateKeyPEM := &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(m.privateKey),
 	}
 
-	keyPath := filepath.Join(m.keyDir, fmt.Sprintf("%s.pem", m.keyID))
+	keyPath := filepath.Join(sshDir, fmt.Sprintf("%s.pem", m.keyID))
 	if err := ioutil.WriteFile(keyPath, pem.EncodeToMemory(privateKeyPEM), 0600); err != nil {
-		return fmt.Errorf("failed to save private key: %w", err)
+		return "", fmt.Errorf("failed to save private key: %w", err)
 	}
 
-	return nil
+	return keyPath, nil
 }
 
 func StartCleanupWorker(ctx context.Context, db *db.PostgresDB, config *types.Config) {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/brimblehq/migration/internal/db/cache"
 	"github.com/brimblehq/migration/internal/types"
 )
 
@@ -34,7 +35,16 @@ type SetupAPIResponse struct {
 	Data SetupResponse `json:"data"`
 }
 
-func GetDatabaseUrl(licenseKey string) (string, string, int, error) {
+var diskCache *cache.DiskCache
+
+func GetSetupConfigurations(licenseKey string) (string, string, int, error) {
+	// if diskCache != nil {
+	// 	var config SetupResponse
+	// 	if diskCache.Get(licenseKey, &config) {
+	// 		return config.DatabaseURI, config.TailScaleToken, config.MaxDevices, nil
+	// 	}
+	// }
+
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
@@ -64,10 +74,22 @@ func GetDatabaseUrl(licenseKey string) (string, string, int, error) {
 		return "", "", 0, fmt.Errorf("invalid license key")
 	}
 
+	// if diskCache != nil {
+	// 	config := SetupResponse{
+	// 		DatabaseURI:    apiResp.Data.DatabaseURI,
+	// 		TailScaleToken: apiResp.Data.TailScaleToken,
+	// 		MaxDevices:     apiResp.Data.MaxDevices,
+	// 	}
+
+	// 	if err := diskCache.Set(licenseKey, config, 5*time.Minute); err != nil {
+	// 		fmt.Printf("Warning: Failed to cache setup data: %v\n", err)
+	// 	}
+	// }
+
 	return apiResp.Data.DatabaseURI, apiResp.Data.TailScaleToken, apiResp.Data.MaxDevices, nil
 }
 
-func ValidateLicenseKey(licenseKey string, deviceId string, hostname string) (*types.LicenseResponse, error) {
+func ValidateOrRegisterMachineLicenseKey(licenseKey string, deviceId string, hostname string) (*types.LicenseResponse, error) {
 	url := "https://core.brimble.io/v1/license"
 
 	client := &http.Client{

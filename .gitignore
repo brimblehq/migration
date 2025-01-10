@@ -3,3 +3,4 @@ dist/
 .pem
 .pulumi
 brimble-temp-*
+*.json

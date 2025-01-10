@@ -3,18 +3,19 @@ package provision
 import (
 	"fmt"
 
+	"github.com/brimblehq/migration/internal/db"
 	"github.com/brimblehq/migration/internal/ssh"
 	"github.com/brimblehq/migration/internal/types"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
 type CloudProvisioner interface {
-	ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) (*types.ProvisionResult, error)
+	ProvisionServers(ctx *pulumi.Context, config types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager, database *db.PostgresDB) (*types.ProvisionResult, error)
 	ValidateConfig(config types.ProvisionServerConfig) error
 	GetProviderName() string
 }
 
-func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager) error {
+func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types.ProvisionServerConfig, tempSSHManager *ssh.TempSSHManager, database *db.PostgresDB) error {
 	provisioner, err := GetProvisioner(provider)
 	if err != nil {
 		return err
@@ -24,7 +25,7 @@ func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types
 		return err
 	}
 
-	result, err := provisioner.ProvisionServers(ctx, *config, tempSSHManager)
+	result, err := provisioner.ProvisionServers(ctx, *config, tempSSHManager, database)
 	if err != nil {
 		return err
 	}
@@ -32,16 +33,19 @@ func ProvisionInfrastructure(ctx *pulumi.Context, provider string, config *types
 	var serverIDs []pulumi.StringOutput
 	var publicIPs []pulumi.StringOutput
 	var privateIPs []pulumi.StringOutput
+	var keyPaths []string
 
 	for _, server := range result.Servers {
 		serverIDs = append(serverIDs, server.ID.ToStringOutput())
-		publicIPs = append(publicIPs, server.PublicIP)
-		privateIPs = append(privateIPs, server.PrivateIP)
+		publicIPs = append(publicIPs, server.PublicIP.ToStringOutput())
+		privateIPs = append(privateIPs, server.PrivateIP.ToStringOutput())
+		keyPaths = append(keyPaths, server.ProvisionKeyPath)
 	}
 
 	ctx.Export("serverIds", pulumi.ToStringArrayOutput(serverIDs))
 	ctx.Export("publicIps", pulumi.ToStringArrayOutput(publicIPs))
 	ctx.Export("privateIps", pulumi.ToStringArrayOutput(privateIPs))
+	ctx.Export("keyPaths", pulumi.Any(keyPaths))
 
 	return nil
 }

@@ -31,11 +31,18 @@ type TempSSHKey struct {
 	Servers            []string   `json:"servers"`
 }
 
+type PulumiProvision struct {
+	ID        string    `json:"id"`
+	Reference string    `json:"reference"`
+	Region    string    `json:"region"`
+	Status    string    `json:"status"`
+	Resources []string  `json:"resources"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 func NewPostgresDB(config DbConfig) (*PostgresDB, error) {
-	db, err := sql.Open("postgres", fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		"aws-0-eu-west-2.pooler.supabase.com", 6543, "postgres.bwpuiyfchjkhezkypxpm", "xhGUnf75yy3Afyb#", "postgres", "require",
-	))
+	db, err := sql.Open("postgres", "postgresql://ileri:password@localhost:5411/defaultdb?sslmode=disable")
 
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to database: %v", err)
@@ -60,6 +67,104 @@ func NewPostgresDB(config DbConfig) (*PostgresDB, error) {
 
 func (p *PostgresDB) Close() error {
 	return p.db.Close()
+}
+
+func (p *PostgresDB) SavePulumiProvision(ctx context.Context, reference, region string, resources []string, status string) error {
+	resourcesJSON, err := json.Marshal(resources)
+	if err != nil {
+		return fmt.Errorf("failed to marshal resources: %w", err)
+	}
+
+	query := `
+        INSERT INTO pulumi_provisions (
+            reference,
+            region,
+            resources,
+            status,
+            created_at,
+            updated_at
+        ) VALUES (
+            $1, $2, $3, $4, NOW(), NOW()
+        ) ON CONFLICT (reference) DO UPDATE 
+        SET 
+            resources = $3,
+            status = $4,
+            updated_at = NOW()
+    `
+
+	_, err = p.db.ExecContext(ctx, query,
+		reference,
+		region,
+		resourcesJSON,
+		status,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to save/update provision: %w", err)
+	}
+
+	return nil
+}
+
+func (p *PostgresDB) GetPulumiProvision(ctx context.Context, reference string) (*PulumiProvision, error) {
+	var provision PulumiProvision
+	var resourcesBytes []byte
+
+	query := `
+        SELECT 
+            id,
+            reference,
+            region,
+            status,
+            resources,
+            created_at,
+            updated_at
+        FROM pulumi_provisions
+        WHERE reference = $1
+        AND status = 'active'
+    `
+
+	err := p.db.QueryRowContext(ctx, query, reference).Scan(
+		&provision.ID,
+		&provision.Reference,
+		&provision.Region,
+		&provision.Status,
+		&resourcesBytes,
+		&provision.CreatedAt,
+		&provision.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pulumi provision: %w", err)
+	}
+
+	if err := json.Unmarshal(resourcesBytes, &provision.Resources); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal resources: %w", err)
+	}
+
+	return &provision, nil
+}
+
+func (p *PostgresDB) CheckPulumiProvisionExists(ctx context.Context, reference string) (bool, error) {
+	var exists bool
+	query := `
+        SELECT EXISTS(
+            SELECT 1 
+            FROM pulumi_provisions 
+            WHERE reference = $1 
+            AND status = 'active'
+        )
+    `
+
+	err := p.db.QueryRowContext(ctx, query, reference).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error checking pulumi provision existence: %w", err)
+	}
+
+	return exists, nil
 }
 
 func (p *PostgresDB) RegisterServer(machineID, publicIP, privateIP, role string, identifier string, step types.ServerStep) error {
